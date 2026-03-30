@@ -89,10 +89,10 @@ def sse_error(message: str) -> str:
 # ── 챗봇 목록 (활성) ──────────────────────────────────────────────
 @router.get("/chatbots")
 def list_active_chatbots(
+    request: Request,
     manager: ChatbotManager = Depends(get_chatbot_manager),
-    _user: dict = Depends(lambda req: get_current_user(req)),
-    request: Request = None,
 ):
+    user = get_current_user(request)
     return [
         {"id": c.id, "name": c.name, "description": c.description, "role": c.role.value}
         for c in manager.list_active()

@@ -46,7 +46,7 @@ class Settings:
 
     # ── 서버 ─────────────────────────────────────────────────────
     HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    PORT: int = int(os.getenv("PORT", "8080"))
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
 
 
