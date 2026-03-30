@@ -9,6 +9,15 @@ from pathlib import Path
 # 프로젝트 루트 (multi-custom-agent/)
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# .env 파일 로드 (python-dotenv 사용)
+try:
+    from dotenv import load_dotenv
+    env_path = PROJECT_ROOT / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=True)
+except ImportError:
+    pass  # python-dotenv 없으면 환경변수만 사용
+
 
 class Settings:
     # ── 모드 플래그 ──────────────────────────────────────────────
