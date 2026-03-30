@@ -41,7 +41,7 @@ class Settings:
     # ── LLM (OpenAI 호환 사내 엔드포인트) ────────────────────────
     LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")
     LLM_API_KEY: str = os.getenv("LLM_API_KEY", "dummy-key")
-    LLM_DEFAULT_MODEL: str = os.getenv("LLM_DEFAULT_MODEL", "gpt-4o")
+    LLM_DEFAULT_MODEL: str = os.getenv("LLM_DEFAULT_MODEL", "GLM4.7")
     LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "120"))
 
     # ── Ingestion 서버 ────────────────────────────────────────────
