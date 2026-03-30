@@ -31,6 +31,19 @@ class LLMConfig:
     max_tokens: int = 1024
     stream: bool = True
 
+    @classmethod
+    def from_dict(cls, data: dict, default_model: str = "GLM4.7") -> "LLMConfig":
+        """LLMConfig 생성 - model이 없으면 default_model 사용"""
+        model = data.get("model")
+        if not model:  # None, "", 빈값 모두 체크
+            model = default_model
+        return cls(
+            model=model,
+            temperature=data.get("temperature", 0.3),
+            max_tokens=data.get("max_tokens", 1024),
+            stream=data.get("stream", True),
+        )
+
 
 @dataclass
 class MemoryConfig:
@@ -73,12 +86,7 @@ class ChatbotDef:
                 k=data["retrieval"].get("k", 5),
                 filter_metadata=data["retrieval"].get("filter_metadata", {}),
             ),
-            llm=LLMConfig(
-                model=data["llm"]["model"],
-                temperature=data["llm"].get("temperature", 0.3),
-                max_tokens=data["llm"].get("max_tokens", 1024),
-                stream=data["llm"].get("stream", True),
-            ),
+            llm=LLMConfig.from_dict(data.get("llm", {})),
             memory=MemoryConfig(
                 enabled=data["memory"].get("enabled", True),
                 max_messages=data["memory"].get("max_messages", 20),
