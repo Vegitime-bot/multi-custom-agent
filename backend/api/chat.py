@@ -11,6 +11,8 @@ api/chat.py - 채팅 API + SSE 스트리밍
 7. 메모리 저장
 """
 import json
+import time
+import traceback
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -21,6 +23,7 @@ from backend.auth.mock_auth import get_current_user
 from backend.config import settings
 from backend.core.factory import create_execution_context
 from backend.core.models import Message
+from backend.debug_logger import logger
 from backend.managers.chatbot_manager import ChatbotManager
 from backend.managers.memory_manager import MemoryManager
 from backend.managers.session_manager import SessionManager
@@ -92,11 +95,14 @@ def list_active_chatbots(
     request: Request,
     manager: ChatbotManager = Depends(get_chatbot_manager),
 ):
+    logger.info(f"[API] /api/chatbots 호출됨")
     user = get_current_user(request)
-    return [
+    chatbots = [
         {"id": c.id, "name": c.name, "description": c.description, "role": c.role.value}
         for c in manager.list_active()
     ]
+    logger.info(f"[API] 챗봇 {len(chatbots)}개 반환")
+    return chatbots
 
 
 # ── 세션 생성 ─────────────────────────────────────────────────────
@@ -132,12 +138,23 @@ async def chat(
     memory_mgr: MemoryManager = Depends(get_memory_manager),
     role_router: RoleRouter = Depends(get_role_router),
 ):
+    start_time = time.time()
+    request_id = f"{int(start_time * 1000)}"
+    
+    logger.info(f"[Chat {request_id}] ========== 새 채팅 요청 ==========")
+    logger.info(f"[Chat {request_id}] chatbot_id: {body.chatbot_id}")
+    logger.info(f"[Chat {request_id}] message: {body.message[:50]}...")
+    logger.info(f"[Chat {request_id}] session_id: {body.session_id}")
+    
     user = get_current_user(request)
+    logger.info(f"[Chat {request_id}] user: {user.get('knox_id', 'unknown')}")
 
     # 1. 챗봇 정의 조회
     chatbot_def = chatbot_mgr.get_active(body.chatbot_id)
     if not chatbot_def:
+        logger.error(f"[Chat {request_id}] 챗봇을 찾을 수 없음: {body.chatbot_id}")
         raise HTTPException(status_code=404, detail=f"활성 챗봇을 찾을 수 없습니다: {body.chatbot_id}")
+    logger.info(f"[Chat {request_id}] 챗봇 조회 성공: {chatbot_def.name} (role={chatbot_def.role.value})")
 
     # 2. 세션 확인/생성
     session = session_mgr.get_or_create(
@@ -145,38 +162,68 @@ async def chat(
         user_knox_id=user["knox_id"],
         session_id=body.session_id,
     )
+    logger.info(f"[Chat {request_id}] 세션 확인/생성: {session.session_id}")
+    
     if body.role_override:
         from backend.core.models import ExecutionRole
         for bot_id, role_str in body.role_override.items():
             session.role_override[bot_id] = ExecutionRole(role_str)
+            logger.info(f"[Chat {request_id}] role_override: {bot_id} -> {role_str}")
 
     # 3. 사용자 DB 스코프
     user_db_scope = get_user_db_scope(user)
+    logger.info(f"[Chat {request_id}] user_db_scope: {user_db_scope}")
 
     # 4. ExecutionContext 생성 (Factory)
+    logger.info(f"[Chat {request_id}] ExecutionContext 생성 중...")
     context = create_execution_context(
         chatbot_def=chatbot_def,
         session=session,
         user_db_scope=user_db_scope,
         memory_manager=memory_mgr,
     )
+    logger.info(f"[Chat {request_id}] authorized_db_ids: {context.authorized_db_ids}")
+    logger.info(f"[Chat {request_id}] effective_role: {context.effective_role.value}")
 
     # 5. 역할에 맞는 핸들러 선택
     handler = role_router.resolve(context.effective_role)
+    logger.info(f"[Chat {request_id}] 핸들러 선택: {handler.__class__.__name__}")
 
     # 6. SSE 스트리밍 응답 생성
     async def event_generator() -> AsyncGenerator[str, None]:
         full_response = []
+        chunk_count = 0
+        llm_start_time = time.time()
+        
+        logger.info(f"[Chat {request_id}] LLM 스트리밍 시작...")
+        
         try:
             for chunk in handler.stream(context, body.message):
+                chunk_count += 1
                 full_response.append(chunk)
                 yield sse_event(chunk)
+                
+                # 100개 청크마다 로그
+                if chunk_count % 100 == 0:
+                    elapsed = time.time() - llm_start_time
+                    logger.info(f"[Chat {request_id}] 스트리밍 중... {chunk_count} chunks, {elapsed:.1f}s")
+                    
         except Exception as e:
-            yield sse_error(str(e))
+            elapsed = time.time() - llm_start_time
+            logger.error(f"[Chat {request_id}] LLM 스트리밍 실패 ({elapsed:.1f}s): {str(e)}")
+            logger.error(f"[Chat {request_id}] 오류 상세: {traceback.format_exc()}")
+            yield sse_error(f"LLM 오류: {str(e)}")
             return
+
+        llm_elapsed = time.time() - llm_start_time
+        total_elapsed = time.time() - start_time
+        
+        logger.info(f"[Chat {request_id}] LLM 스트리밍 완료: {chunk_count} chunks, {llm_elapsed:.1f}s")
+        logger.info(f"[Chat {request_id}] 응답 길이: {len(''.join(full_response))}자")
 
         # 7. 메모리 저장 (스트리밍 완료 후)
         if chatbot_def.memory.enabled:
+            logger.info(f"[Chat {request_id}] 메모리 저장 중...")
             memory_mgr.append_pair(
                 chatbot_id=chatbot_def.id,
                 session_id=session.session_id,
@@ -184,9 +231,12 @@ async def chat(
                 assistant_content="".join(full_response),
                 max_messages=chatbot_def.memory.max_messages,
             )
+            logger.info(f"[Chat {request_id}] 메모리 저장 완료")
 
         yield sse_event(session.session_id, event="session_id")
         yield sse_done()
+        
+        logger.info(f"[Chat {request_id}] ========== 요청 완료 (총 {total_elapsed:.1f}s) ==========")
 
     return StreamingResponse(
         event_generator(),
