@@ -24,11 +24,19 @@ cp .env.example .env
 # .env 파일 수정
 ```
 
-### 3. 서버 실행
+### 3. Mock Ingestion 서버 실행 (RAG 검색용)
+
+```bash
+# 터미널 1: Ingestion 서버 (포트 8001)
+python mock_ingestion_server.py
+```
+
+### 4. 메인 서버 실행
 
 **방법 1: uvicorn 직접 실행 (권장)**
 
 ```bash
+# 터미널 2: 메인 서버 (포트 8080)
 uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
@@ -38,7 +46,9 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
 python backend/main.py
 ```
 
-### 4. 접속
+> **중요:** Ingestion 서버가 먼저 켜져 있어야 챗봇이 문서 검색 및 답변 생성 가능
+
+### 5. 접속
 
 - 챗봇 UI: `http://localhost:8080`
 - API 문서: `http://localhost:8080/docs`
