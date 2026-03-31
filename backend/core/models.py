@@ -75,32 +75,64 @@ class ChatbotDef:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ChatbotDef":
-        return cls(
-            id=data["id"],
-            name=data["name"],
-            description=data.get("description", ""),
-            role=ExecutionRole(data.get("role", "agent")),
-            active=data.get("active", True),
-            retrieval=RetrievalConfig(
-                db_ids=data["retrieval"]["db_ids"],
-                k=data["retrieval"].get("k", 5),
-                filter_metadata=data["retrieval"].get("filter_metadata", {}),
-            ),
-            llm=LLMConfig.from_dict(data.get("llm", {})),
-            memory=MemoryConfig(
-                enabled=data["memory"].get("enabled", True),
-                max_messages=data["memory"].get("max_messages", 20),
-            ),
-            system_prompt=data.get("system_prompt", ""),
-            sub_chatbots=[
-                SubChatbotRef(
-                    id=s["id"],
-                    level=s["level"],
-                    default_role=ExecutionRole(s["default_role"]),
-                )
-                for s in data.get("sub_chatbots", [])
-            ],
-        )
+        # 새로운 구조 (capabilities/policy)와 기존 구조(role/retrieval/llm/memory) 지원
+        if "capabilities" in data and "policy" in data:
+            # 새 구조: capabilities/policy 방식
+            caps = data["capabilities"]
+            policy = data["policy"]
+            
+            return cls(
+                id=data["id"],
+                name=data["name"],
+                description=data.get("description", ""),
+                role=ExecutionRole(policy.get("default_mode", "agent")),
+                active=data.get("active", True),
+                retrieval=RetrievalConfig(
+                    db_ids=caps.get("db_ids", []),
+                    k=5,  # policy에서 분리됨
+                    filter_metadata={},
+                ),
+                llm=LLMConfig.from_dict({
+                    "model": caps.get("model", "kimi-k2.5:cloud"),
+                    "temperature": policy.get("temperature", 0.3),
+                    "max_tokens": policy.get("max_tokens", 1024),
+                    "stream": policy.get("stream", True),
+                }),
+                memory=MemoryConfig(
+                    enabled=policy.get("default_mode", "agent") == "agent",
+                    max_messages=policy.get("max_messages", 20),
+                ),
+                system_prompt=caps.get("system_prompt", ""),
+                sub_chatbots=data.get("sub_chatbots", []),
+            )
+        else:
+            # 기존 구조: role/retrieval/llm/memory 방식 (하위호환)
+            return cls(
+                id=data["id"],
+                name=data["name"],
+                description=data.get("description", ""),
+                role=ExecutionRole(data.get("role", "agent")),
+                active=data.get("active", True),
+                retrieval=RetrievalConfig(
+                    db_ids=data["retrieval"]["db_ids"],
+                    k=data["retrieval"].get("k", 5),
+                    filter_metadata=data["retrieval"].get("filter_metadata", {}),
+                ),
+                llm=LLMConfig.from_dict(data.get("llm", {})),
+                memory=MemoryConfig(
+                    enabled=data["memory"].get("enabled", True),
+                    max_messages=data["memory"].get("max_messages", 20),
+                ),
+                system_prompt=data.get("system_prompt", ""),
+                sub_chatbots=[
+                    SubChatbotRef(
+                        id=s["id"],
+                        level=s["level"],
+                        default_role=ExecutionRole(s["default_role"]),
+                    )
+                    for s in data.get("sub_chatbots", [])
+                ],
+            )
 
     def to_dict(self) -> dict:
         return {

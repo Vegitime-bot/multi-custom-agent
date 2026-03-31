@@ -1,14 +1,13 @@
 from __future__ import annotations
 """
-api/chat.py - 채팅 API + SSE 스트리밍
+api/chat.py - 채팅 API + SSE 스트리밍 (Executor 기반 리팩토링)
 요청 실행 라이프사이클:
 1. 챗봇 정의 조회
 2. 사용자 인증 + 권한 검사
 3. 세션 확인/생성
-4. Factory → ExecutionContext 생성
-5. Role Router → 핸들러 선택
+4. ExecutionContext 생성
+5. Mode에 맞는 Executor 선택 (Tool/Agent)
 6. 검색 + LLM 스트리밍
-7. 메모리 저장
 """
 import json
 import time
@@ -21,13 +20,13 @@ from pydantic import BaseModel
 
 from backend.auth.mock_auth import get_current_user
 from backend.config import settings
-from backend.core.factory import create_execution_context
-from backend.core.models import Message
+from backend.core.models import ExecutionRole
 from backend.debug_logger import logger
+from backend.executors import ToolExecutor, AgentExecutor
 from backend.managers.chatbot_manager import ChatbotManager
 from backend.managers.memory_manager import MemoryManager
 from backend.managers.session_manager import SessionManager
-from backend.roles.router import RoleRouter
+from backend.retrieval.ingestion_client import IngestionClient
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -37,13 +36,15 @@ class ChatRequest(BaseModel):
     chatbot_id: str
     message: str
     session_id: str | None = None
-    role_override: dict[str, str] | None = None
+    mode: str | None = None  # "tool" | "agent" | None (None이면 default_mode 사용)
+    role_override: dict[str, str] | None = None  # 하위호환
     active_level: int = 1
 
 
 class SessionCreateRequest(BaseModel):
     chatbot_id: str
     session_id: str | None = None
+    mode: str | None = None
     role_override: dict[str, str] | None = None
     active_level: int = 1
 
@@ -58,21 +59,65 @@ def get_session_manager(request: Request) -> SessionManager:
 def get_memory_manager(request: Request) -> MemoryManager:
     return request.app.state.memory_manager
 
-def get_role_router(request: Request) -> RoleRouter:
-    return request.app.state.role_router
+def get_ingestion_client(request: Request) -> IngestionClient:
+    return request.app.state.ingestion_client
 
 
-# ── 사용자 DB 스코프 (임시: 모든 DB 허용, 운영 시 PostgreSQL 기반으로 교체) ──
-def get_user_db_scope(user: dict) -> set[str]:
-    """
-    사용자에게 허용된 db_ids를 반환한다.
-    현재는 Mock으로 모든 DB 허용.
-    운영 환경에서는 PostgreSQL users_db_scope 테이블에서 조회한다.
-    """
+# ═══════════════════════════════════════════════════════════════════
+# Phase 4: 권한 모듈 (Mode 기반 접근 제어)
+# ═══════════════════════════════════════════════════════════════════
+
+# 모의 사용자 권한 데이터 (실제 환경에서는 PostgreSQL에서 조회)
+MOCK_USER_PERMISSIONS = {
+    "user-001": {  # 일반 사용자
+        "chatbot-a": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-b": {"access": True, "allowed_modes": ["tool"]},  # Tool만
+        "chatbot-c": {"access": False, "allowed_modes": []},  # 접근 불가
+        "chatbot-d": {"access": True, "allowed_modes": ["tool", "agent"]},
+    },
+    "user-002": {  # 관리자
+        "chatbot-a": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-b": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-c": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-d": {"access": True, "allowed_modes": ["tool", "agent"]},
+    },
+    "system": {  # 시스템 계정 (내부 호출용)
+        "chatbot-a": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-b": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-c": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-d": {"access": True, "allowed_modes": ["tool"]},
+    },
+}
+
+
+def get_user_permissions(user: dict) -> dict:
+    """사용자의 챗봇별 권한 조회"""
+    user_id = user.get("knox_id", "unknown")
+    # Mock: 모든 사용자에게 user-001 권한 부여 (실제 환경에서 DB 조회)
     if settings.USE_MOCK_AUTH:
-        # Mock: 모든 DB에 접근 허용
+        return MOCK_USER_PERMISSIONS.get("user-001", {})
+    return MOCK_USER_PERMISSIONS.get(user_id, {})
+
+
+def check_chatbot_access(permissions: dict, chatbot_id: str) -> bool:
+    """챗봇 접근 권한 확인"""
+    bot_perm = permissions.get(chatbot_id, {})
+    return bot_perm.get("access", False)
+
+
+def check_mode_permission(permissions: dict, chatbot_id: str, mode: str) -> bool:
+    """특정 mode 사용 권한 확인"""
+    bot_perm = permissions.get(chatbot_id, {})
+    if not bot_perm.get("access", False):
+        return False
+    allowed = bot_perm.get("allowed_modes", [])
+    return mode in allowed
+
+
+# ── 사용자 DB 스코프 (임시: 모든 DB 허용) ──
+def get_user_db_scope(user: dict) -> set[str]:
+    if settings.USE_MOCK_AUTH:
         return {"db_001", "db_002", "db_003", "db_004", "db_005"}
-    # TODO: PostgreSQL에서 사용자별 db_scope 조회
     return set()
 
 
@@ -89,7 +134,21 @@ def sse_error(message: str) -> str:
     return f"event: error\ndata: {json.dumps({'error': message}, ensure_ascii=False)}\n\n"
 
 
-# ── 챗봇 목록 (활성) ──────────────────────────────────────────────
+# ── Executor 팩토리 ───────────────────────────────────────────────
+def create_executor(
+    mode: ExecutionRole,
+    chatbot_def,
+    ingestion_client: IngestionClient,
+    memory_manager: MemoryManager,
+):
+    """모드에 맞는 Executor 생성"""
+    if mode == ExecutionRole.TOOL:
+        return ToolExecutor(chatbot_def, ingestion_client)
+    else:
+        return AgentExecutor(chatbot_def, ingestion_client, memory_manager)
+
+
+# ── 챗봇 목록 ─────────────────────────────────────────────────────
 @router.get("/chatbots")
 def list_active_chatbots(
     request: Request,
@@ -98,7 +157,13 @@ def list_active_chatbots(
     logger.info(f"[API] /api/chatbots 호출됨")
     user = get_current_user(request)
     chatbots = [
-        {"id": c.id, "name": c.name, "description": c.description, "role": c.role.value}
+        {
+            "id": c.id,
+            "name": c.name,
+            "description": c.description,
+            "supported_modes": ["tool", "agent"],  # TODO: chatbot_def에 추가
+            "default_mode": c.role.value,  # TODO: default_mode로 변경
+        }
         for c in manager.list_active()
     ]
     logger.info(f"[API] 챗봇 {len(chatbots)}개 반환")
@@ -118,17 +183,26 @@ def create_session(
     if not chatbot:
         raise HTTPException(status_code=404, detail=f"활성 챗봇을 찾을 수 없습니다: {body.chatbot_id}")
 
+    # mode 설정 (하위호환: role_override 지원)
+    mode = body.mode
+    if not mode and body.role_override:
+        mode = body.role_override.get(body.chatbot_id)
+    
+    # mode가 없으면 챗봇의 default 사용
+    if not mode:
+        mode = chatbot.role.value
+
     session = session_mgr.create_session(
         chatbot_id=body.chatbot_id,
         user_knox_id=user["knox_id"],
         session_id=body.session_id,
-        role_override=body.role_override,
+        role_override={body.chatbot_id: mode} if mode else None,
         active_level=body.active_level,
     )
     return session.to_dict()
 
 
-# ── 채팅 (SSE 스트리밍) ───────────────────────────────────────────
+# ── 채팅 (SSE 스트리밍) - Executor 기반 ──────────────────────────
 @router.post("/chat")
 async def chat(
     body: ChatRequest,
@@ -136,7 +210,7 @@ async def chat(
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
     session_mgr: SessionManager = Depends(get_session_manager),
     memory_mgr: MemoryManager = Depends(get_memory_manager),
-    role_router: RoleRouter = Depends(get_role_router),
+    ingestion_client: IngestionClient = Depends(get_ingestion_client),
 ):
     start_time = time.time()
     request_id = f"{int(start_time * 1000)}"
@@ -145,106 +219,101 @@ async def chat(
     logger.info(f"[Chat {request_id}] chatbot_id: {body.chatbot_id}")
     logger.info(f"[Chat {request_id}] message: {body.message[:50]}...")
     logger.info(f"[Chat {request_id}] session_id: {body.session_id}")
-    
-    user = get_current_user(request)
-    logger.info(f"[Chat {request_id}] user: {user.get('knox_id', 'unknown')}")
+    logger.info(f"[Chat {request_id}] mode: {body.mode}")
 
     # 1. 챗봇 정의 조회
     chatbot_def = chatbot_mgr.get_active(body.chatbot_id)
     if not chatbot_def:
-        logger.error(f"[Chat {request_id}] 챗봇을 찾을 수 없음: {body.chatbot_id}")
         raise HTTPException(status_code=404, detail=f"활성 챗봇을 찾을 수 없습니다: {body.chatbot_id}")
-    logger.info(f"[Chat {request_id}] 챗봇 조회 성공: {chatbot_def.name} (role={chatbot_def.role.value})")
+    logger.info(f"[Chat {request_id}] 챗봇 조회 성공: {chatbot_def.name}")
 
     # 2. 세션 확인/생성
     session = session_mgr.get_or_create(
         chatbot_id=body.chatbot_id,
-        user_knox_id=user["knox_id"],
+        user_knox_id=get_current_user(request)["knox_id"],
         session_id=body.session_id,
     )
-    logger.info(f"[Chat {request_id}] 세션 확인/생성: {session.session_id}")
+    logger.info(f"[Chat {request_id}] 세션: {session.session_id}")
+
+    # 3. 모드 결정 (요청 > 세션 > 챗봇 default)
+    mode_str = body.mode
+    if not mode_str and session.role_override.get(body.chatbot_id):
+        mode_str = session.role_override[body.chatbot_id].value
+    if not mode_str:
+        mode_str = chatbot_def.role.value
     
-    if body.role_override:
-        from backend.core.models import ExecutionRole
-        for bot_id, role_str in body.role_override.items():
-            session.role_override[bot_id] = ExecutionRole(role_str)
-            logger.info(f"[Chat {request_id}] role_override: {bot_id} -> {role_str}")
+    try:
+        mode = ExecutionRole(mode_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"잘못된 mode: {mode_str}")
+    
+    logger.info(f"[Chat {request_id}] 실행 mode: {mode.value}")
 
-    # 3. 사용자 DB 스코프
-    user_db_scope = get_user_db_scope(user)
-    logger.info(f"[Chat {request_id}] user_db_scope: {user_db_scope}")
+    # 4. DB 스코프 계산
+    user_db_scope = get_user_db_scope(get_current_user(request))
+    authorized_db_ids = [
+        db_id for db_id in chatbot_def.retrieval.db_ids
+        if db_id in user_db_scope
+    ]
+    logger.info(f"[Chat {request_id}] authorized_db_ids: {authorized_db_ids}")
 
-    # 4. ExecutionContext 생성 (Factory)
-    logger.info(f"[Chat {request_id}] ExecutionContext 생성 중...")
-    context = create_execution_context(
-        chatbot_def=chatbot_def,
-        session=session,
-        user_db_scope=user_db_scope,
-        memory_manager=memory_mgr,
-    )
-    logger.info(f"[Chat {request_id}] authorized_db_ids: {context.authorized_db_ids}")
-    logger.info(f"[Chat {request_id}] effective_role: {context.effective_role.value}")
+    # 5. 권한 확인 (Phase 4: Mode 기반 권한)
+    user = get_current_user(request)
+    permissions = get_user_permissions(user)
+    
+    # 챗봗 접근 권한 확인
+    if not check_chatbot_access(permissions, body.chatbot_id):
+        logger.error(f"[Chat {request_id}] 챗봗 접근 권한 없음: {body.chatbot_id}")
+        raise HTTPException(status_code=403, detail=f"해당 챗봗에 접근할 권한이 없습니다: {body.chatbot_id}")
+    
+    # Mode 사용 권한 확인
+    if not check_mode_permission(permissions, body.chatbot_id, mode.value):
+        logger.error(f"[Chat {request_id}] mode 권한 없음: {mode.value}")
+        raise HTTPException(
+            status_code=403, 
+            detail=f"{mode.value} 모드 사용 권한이 없습니다. 허용된 모드: {permissions.get(body.chatbot_id, {}).get('allowed_modes', [])}"
+        )
+    
+    logger.info(f"[Chat {request_id}] 권한 확인 완료")
 
-    # 5. 역할에 맞는 핸들러 선택
-    handler = role_router.resolve(context.effective_role)
-    logger.info(f"[Chat {request_id}] 핸들러 선택: {handler.__class__.__name__}")
+    # 6. Executor 생성
+    executor = create_executor(mode, chatbot_def, ingestion_client, memory_mgr)
+    logger.info(f"[Chat {request_id}] Executor: {executor.__class__.__name__}")
 
-    # 6. SSE 스트리밍 응답 생성
+    # 6. SSE 스트리밍
     async def event_generator() -> AsyncGenerator[str, None]:
         full_response = []
         chunk_count = 0
         llm_start_time = time.time()
         
-        logger.info(f"[Chat {request_id}] LLM 스트리밍 시작...")
-        
         try:
-            for chunk in handler.stream(context, body.message):
+            for chunk in executor.execute(body.message, session.session_id):
                 chunk_count += 1
                 full_response.append(chunk)
                 yield sse_event(chunk)
                 
-                # 100개 청크마다 로그
                 if chunk_count % 100 == 0:
                     elapsed = time.time() - llm_start_time
-                    logger.info(f"[Chat {request_id}] 스트리밍 중... {chunk_count} chunks, {elapsed:.1f}s")
+                    logger.info(f"[Chat {request_id}] 스트리밍 중... {chunk_count} chunks")
                     
         except Exception as e:
-            elapsed = time.time() - llm_start_time
-            logger.error(f"[Chat {request_id}] LLM 스트리밍 실패 ({elapsed:.1f}s): {str(e)}")
-            logger.error(f"[Chat {request_id}] 오류 상세: {traceback.format_exc()}")
-            yield sse_error(f"LLM 오류: {str(e)}")
+            logger.error(f"[Chat {request_id}] 스트리밍 실패: {str(e)}")
+            logger.error(f"[Chat {request_id}] {traceback.format_exc()}")
+            yield sse_error(f"실행 오류: {str(e)}")
             return
 
         llm_elapsed = time.time() - llm_start_time
-        total_elapsed = time.time() - start_time
-        
-        logger.info(f"[Chat {request_id}] LLM 스트리밍 완료: {chunk_count} chunks, {llm_elapsed:.1f}s")
-        logger.info(f"[Chat {request_id}] 응답 길이: {len(''.join(full_response))}자")
-
-        # 7. 메모리 저장 (스트리밍 완료 후)
-        if chatbot_def.memory.enabled:
-            logger.info(f"[Chat {request_id}] 메모리 저장 중...")
-            memory_mgr.append_pair(
-                chatbot_id=chatbot_def.id,
-                session_id=session.session_id,
-                user_content=body.message,
-                assistant_content="".join(full_response),
-                max_messages=chatbot_def.memory.max_messages,
-            )
-            logger.info(f"[Chat {request_id}] 메모리 저장 완료")
+        logger.info(f"[Chat {request_id}] 스트리밍 완료: {chunk_count} chunks, {llm_elapsed:.1f}s")
 
         yield sse_event(session.session_id, event="session_id")
         yield sse_done()
         
-        logger.info(f"[Chat {request_id}] ========== 요청 완료 (총 {total_elapsed:.1f}s) ==========")
+        total_elapsed = time.time() - start_time
+        logger.info(f"[Chat {request_id}] ========== 완료 ({total_elapsed:.1f}s) ==========")
 
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
     )
 
 
@@ -273,3 +342,156 @@ def close_session(
     memory_mgr.clear_all_for_session(session_id)
     session_mgr.close_session(session_id)
     return {"message": f"세션 {session_id} 종료 완료"}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Phase 2: Tool / Agent 전용 엔드포인트
+# ═══════════════════════════════════════════════════════════════════
+
+class ToolRequest(BaseModel):
+    """Tool 모드 요청 - 단발성 함수 호출"""
+    message: str
+    context: dict | None = None  # 추가 컨텍스트 (선택)
+
+
+class AgentRequest(BaseModel):
+    """Agent 모드 요청 - 대화형"""
+    message: str
+    session_id: str  # Agent는 세션 필수
+
+
+# ── Tool 전용 엔드포인트 ──────────────────────────────────────────
+@router.post("/tools/{chatbot_id}")
+async def chat_tool(
+    chatbot_id: str,
+    body: ToolRequest,
+    request: Request,
+    chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
+    ingestion_client: IngestionClient = Depends(get_ingestion_client),
+):
+    """
+    Tool 모드 전용 엔드포인트
+    - 단발성 호출 (함수처럼)
+    - 메모리 없음
+    - 외부 오케스트레이터 연동에 적합
+    """
+    start_time = time.time()
+    request_id = f"{int(start_time * 1000)}"
+    
+    logger.info(f"[Tool {request_id}] ========== Tool 요청 ==========")
+    logger.info(f"[Tool {request_id}] chatbot_id: {chatbot_id}")
+    logger.info(f"[Tool {request_id}] message: {body.message[:50]}...")
+
+    # 1. 챗봇 정의 조회
+    chatbot_def = chatbot_mgr.get_active(chatbot_id)
+    if not chatbot_def:
+        raise HTTPException(status_code=404, detail=f"활성 챗봇을 찾을 수 없습니다: {chatbot_id}")
+    logger.info(f"[Tool {request_id}] 챗봇: {chatbot_def.name}")
+
+    # 2. 권한 확인 (Phase 4)
+    user = get_current_user(request)
+    permissions = get_user_permissions(user)
+    if not check_chatbot_access(permissions, chatbot_id):
+        raise HTTPException(status_code=403, detail=f"해당 챗봗에 접근할 권한이 없습니다: {chatbot_id}")
+    if not check_mode_permission(permissions, chatbot_id, "tool"):
+        raise HTTPException(status_code=403, detail=f"Tool 모드 사용 권한이 없습니다")
+    logger.info(f"[Tool {request_id}] 권한 확인 완료")
+
+    # 3. Tool Executor 생성
+    executor = ToolExecutor(chatbot_def, ingestion_client)
+    logger.info(f"[Tool {request_id}] ToolExecutor 생성")
+
+    # 4. SSE 스트리밍
+    async def event_generator() -> AsyncGenerator[str, None]:
+        full_response = []
+        chunk_count = 0
+        
+        try:
+            for chunk in executor.execute(body.message, session_id=None):
+                chunk_count += 1
+                full_response.append(chunk)
+                yield sse_event(chunk)
+                
+        except Exception as e:
+            logger.error(f"[Tool {request_id}] 오류: {str(e)}")
+            yield sse_error(f"실행 오류: {str(e)}")
+            return
+
+        yield sse_done()
+        logger.info(f"[Tool {request_id}] 완료 ({len(''.join(full_response))}자)")
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# ── Agent 전용 엔드포인트 ─────────────────────────────────────────
+@router.post("/agents/{chatbot_id}")
+async def chat_agent(
+    chatbot_id: str,
+    body: AgentRequest,
+    request: Request,
+    chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
+    session_mgr: SessionManager = Depends(get_session_manager),
+    memory_mgr: MemoryManager = Depends(get_memory_manager),
+    ingestion_client: IngestionClient = Depends(get_ingestion_client),
+):
+    """
+    Agent 모드 전용 엔드포인트
+    - 대화형 (세션 기반)
+    - 메모리 유지
+    - 사용자와 지속적 대화에 적합
+    """
+    start_time = time.time()
+    request_id = f"{int(start_time * 1000)}"
+    
+    logger.info(f"[Agent {request_id}] ========== Agent 요청 ==========")
+    logger.info(f"[Agent {request_id}] chatbot_id: {chatbot_id}")
+    logger.info(f"[Agent {request_id}] session_id: {body.session_id}")
+
+    # 1. 챗봇 정의 조회
+    chatbot_def = chatbot_mgr.get_active(chatbot_id)
+    if not chatbot_def:
+        raise HTTPException(status_code=404, detail=f"활성 챗봇을 찾을 수 없습니다: {chatbot_id}")
+    logger.info(f"[Agent {request_id}] 챗봇: {chatbot_def.name}")
+
+    # 2. 권한 확인 (Phase 4)
+    user = get_current_user(request)
+    permissions = get_user_permissions(user)
+    if not check_chatbot_access(permissions, chatbot_id):
+        raise HTTPException(status_code=403, detail=f"해당 챗봗에 접근할 권한이 없습니다: {chatbot_id}")
+    if not check_mode_permission(permissions, chatbot_id, "agent"):
+        raise HTTPException(status_code=403, detail=f"Agent 모드 사용 권한이 없습니다")
+    logger.info(f"[Agent {request_id}] 권한 확인 완료")
+
+    # 3. 세션 확인/생성
+    session = session_mgr.get_or_create(
+        chatbot_id=chatbot_id,
+        user_knox_id=user["knox_id"],
+        session_id=body.session_id,
+    )
+    logger.info(f"[Agent {request_id}] 세션: {session.session_id}")
+
+    # 4. Agent Executor 생성
+    executor = AgentExecutor(chatbot_def, ingestion_client, memory_mgr)
+    logger.info(f"[Agent {request_id}] AgentExecutor 생성")
+
+    # 4. SSE 스트리밍
+    async def event_generator() -> AsyncGenerator[str, None]:
+        full_response = []
+        chunk_count = 0
+        
+        try:
+            for chunk in executor.execute(body.message, session_id=session.session_id):
+                chunk_count += 1
+                full_response.append(chunk)
+                yield sse_event(chunk)
+                
+        except Exception as e:
+            logger.error(f"[Agent {request_id}] 오류: {str(e)}")
+            yield sse_error(f"실행 오류: {str(e)}")
+            return
+
+        yield sse_event(session.session_id, event="session_id")
+        yield sse_done()
+        logger.info(f"[Agent {request_id}] 완료 ({len(''.join(full_response))}자)")
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
