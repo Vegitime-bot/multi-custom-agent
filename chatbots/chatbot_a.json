@@ -5,14 +5,18 @@
   "role": "agent",
   "active": true,
   "retrieval": {
-    "db_ids": ["db_001", "db_002"],
+    "db_ids": [
+      "db_001",
+      "db_002"
+    ],
     "k": 5,
     "filter_metadata": {}
   },
   "llm": {
     "temperature": 0.3,
     "max_tokens": 1024,
-    "stream": true
+    "stream": true,
+    "model": "kimi-k2.5:cloud"
   },
   "memory": {
     "enabled": true,

@@ -1,0 +1,24 @@
+{
+  "id": "chatbot-c",
+  "name": "RTL 설계 챗봇",
+  "description": "반도체 RTL 설계 및 Verilog/SystemVerilog 기술지원 챗봇",
+  "role": "agent",
+  "active": true,
+  "retrieval": {
+    "db_ids": ["db_004"],
+    "k": 5,
+    "filter_metadata": {}
+  },
+  "llm": {
+    "model": "kimi-k2.5:cloud",
+    "temperature": 0.3,
+    "max_tokens": 1024,
+    "stream": true
+  },
+  "memory": {
+    "enabled": true,
+    "max_messages": 20
+  },
+  "system_prompt": "당신은 반도체 RTL 설계 전문 어시스턴트입니다.\nVerilog, SystemVerilog, 디지털 회로 설계에 대해 검색된 문서를 바탕으로 답변해 주세요.\n모르는 내용은 모른다고 솔직하게 답변하세요.\n답변은 한국어로 작성하세요.",
+  "sub_chatbots": []
+}

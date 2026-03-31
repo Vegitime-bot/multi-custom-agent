@@ -32,7 +32,7 @@ class LLMConfig:
     stream: bool = True
 
     @classmethod
-    def from_dict(cls, data: dict, default_model: str = "GLM4.7") -> "LLMConfig":
+    def from_dict(cls, data: dict, default_model: str = "kimi-k2.5:cloud") -> "LLMConfig":
         """LLMConfig 생성 - model이 없으면 default_model 사용"""
         model = data.get("model")
         if not model:  # None, "", 빈값 모두 체크
