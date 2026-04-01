@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>챗봇 관리자 - Multi Custom Agent Service</title>
+    <link rel="stylesheet" href="/static/admin/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h1>🤖 Agent Store</h1>
+                <p>챗봇 관리자</p>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-view="store">
+                    <span class="icon">🏪</span>
+                    <span>챗봇 스토어</span>
+                </a>
+                <a href="#" class="nav-item" data-view="hierarchy">
+                    <span class="icon">🌳</span>
+                    <span>Agent 계층</span>
+                </a>
+                <a href="#" class="nav-item" data-view="users">
+                    <span class="icon">👥</span>
+                    <span>사용자 권한</span>
+                </a>
+                <a href="#" class="nav-item" data-view="settings">
+                    <span class="icon">⚙️</span>
+                    <span>설정</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <h2>챗봇 스토어</h2>
+                <div class="header-actions">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="챗봘 검색...">
+                        <span class="search-icon">🔍</span>
+                    </div>
+                    <button class="btn btn-primary" onclick="openCreateModal()">
+                        <span>+</span> 새 챗봘
+                    </button>
+                </div>
+            </header>
+
+            <!-- Filter Tabs -->
+            <div class="filter-tabs">
+                <button class="tab active" data-filter="all">전체</button>
+                <button class="tab" data-filter="parent">상위 Agent</button>
+                <button class="tab" data-filter="child">하위 Agent</button>
+                <button class="tab" data-filter="standalone">단독</button>
+            </div>
+
+            <!-- Chatbot Grid -->
+            <div class="chatbot-grid" id="chatbotGrid">
+                <!-- Cards will be loaded dynamically -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div class="modal" id="chatbotModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">새 챗봘 만들기</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="chatbotForm" class="modal-body">
+                <div class="form-group">
+                    <label>챗봘 ID</label>
+                    <input type="text" id="chatbotId" placeholder="예: chatbot-custom-001" required>
+                </div>
+                <div class="form-group">
+                    <label>챗봘 이름</label>
+                    <input type="text" id="chatbotName" placeholder="예: 커스텀 챗봘" required>
+                </div>
+                <div class="form-group">
+                    <label>설명</label>
+                    <textarea id="chatbotDesc" rows="2" placeholder="챗봘의 역할과 기능을 설명해주세요"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>챗봘 유형</label>
+                    <select id="chatbotType" onchange="onTypeChange()">
+                        <option value="standalone">단독 챗봘</option>
+                        <option value="parent">상위 Agent</option>
+                        <option value="child">하위 Agent</option>
+                    </select>
+                </div>
+                <div class="form-group" id="parentSelectGroup" style="display: none;">
+                    <label>상위 Agent 선택</label>
+                    <select id="parentAgent">
+                        <option value="">선택하세요</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>시스템 프롬프트</label>
+                    <textarea id="systemPrompt" rows="4" placeholder="챗봘의 역할을 정의하는 프롬프트를 입력하세요"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>연결된 DB</label>
+                    <div class="db-tags" id="dbTags">
+                        <span class="tag" data-db="db_new">+ 새 DB 추가</span>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">취소</button>
+                    <button type="submit" class="btn btn-primary">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="deleteModal">
+        <div class="modal-content small">
+            <div class="modal-header">
+                <h3>챗봘 삭제</h3>
+                <button class="close-btn" onclick="closeDeleteModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>정말로 <strong id="deleteChatbotName"></strong>을(를) 삭제하시겠습니까?</p>
+                <p class="warning">이 작업은 되돌릴 수 없습니다.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">취소</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">삭제</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/admin/app.js"></script>
+</body>
+</html>

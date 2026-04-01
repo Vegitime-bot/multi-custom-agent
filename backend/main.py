@@ -55,7 +55,7 @@ def startup():
 # ── 라우터 등록 ───────────────────────────────────────────────────
 app.include_router(health_router)
 app.include_router(chat_router)
-app.include_router(admin_router)
+app.include_router(admin_router, prefix="")
 
 
 # ── 루트: HTML 챗 UI 서빙 ─────────────────────────────────────────

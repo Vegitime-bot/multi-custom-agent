@@ -52,6 +52,29 @@ class AgentExecutor(BaseExecutor):
             db_ids=self.chatbot_def.retrieval.db_ids,
         )
 
+        # 2.5 Confidence 체크 - 검색 결과가 부족하거나 정책 질문인 경우 상위 Agent에게 위임 안내
+        confidence = self._calculate_confidence(context, message)
+        
+        # 정책/규정 관련 키워드 체크
+        policy_keywords = ['규정', '정책', '제도', '지침', '방침', '법규']
+        is_policy_question = any(kw in message for kw in policy_keywords)
+        
+        if confidence < 20 or (is_policy_question and confidence < 50):
+            fallback_msg = (
+                "죄송합니다. 해당 내용은 제 전문 분야가 아닙니다. "
+                "인사정책 전문 챗봘에게 문의해 주세요."
+            )
+            yield fallback_msg
+            # 메모리에도 저장
+            self.memory.append_pair(
+                chatbot_id=self.chatbot_def.id,
+                session_id=session_id,
+                user_content=message,
+                assistant_content=fallback_msg,
+                max_messages=self.chatbot_def.memory.max_messages,
+            )
+            return
+
         # 3. 메시지 구성 (히스토리 포함 - Agent 특성)
         messages = self._build_messages_with_history(
             system_prompt=self.chatbot_def.system_prompt,

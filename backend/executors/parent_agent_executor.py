@@ -69,35 +69,6 @@ class ParentAgentExecutor(AgentExecutor):
             for chunk in self._execute_with_context(message, session_id, context):
                 yield chunk
 
-    def _calculate_confidence(self, context: str, message: str) -> int:
-        """
-        검색 결과 기반 Confidence 계산
-        
-        기준:
-        - 검색 결과 없음: 0-20%
-        - 검색 결과 있지만 관련도 낮음: 30-50%
-        - 검색 결과 충분: 60-100%
-        """
-        if not context or not context.strip():
-            return 15  # 검색 결과 없음
-        
-        # 검색 결과 분석
-        result_count = context.count('---') + context.count('**') // 2
-        content_length = len(context)
-        
-        # 메시지 키워드 매칭
-        keywords_found = sum(1 for kw in message.split() if len(kw) > 1 and kw.lower() in context.lower())
-        
-        # Confidence 계산
-        if result_count == 0 and content_length < 100:
-            return 20  # 거의 관련 없음
-        elif result_count <= 2 and keywords_found < 2:
-            return 40  # 관련도 낮음
-        elif result_count <= 3 and keywords_found < 3:
-            return 60  # 보통
-        else:
-            return 85  # 충분한 정보
-
     def _execute_with_context(
         self,
         message: str,
