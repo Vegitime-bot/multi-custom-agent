@@ -72,7 +72,7 @@ MOCK_USER_PERMISSIONS = {
     "user-001": {  # 일반 사용자
         "chatbot-a": {"access": True, "allowed_modes": ["tool", "agent"]},
         "chatbot-b": {"access": True, "allowed_modes": ["tool"]},  # Tool만
-        "chatbot-c": {"access": False, "allowed_modes": []},  # 접근 불가
+        "chatbot-c": {"access": True, "allowed_modes": ["tool", "agent"]},  # RTL 설계 챗봇 - 접근 허용
         "chatbot-d": {"access": True, "allowed_modes": ["tool", "agent"]},
         # 상위/하위 챗봇 권한
         "chatbot-hr": {"access": True, "allowed_modes": ["tool", "agent"]},
