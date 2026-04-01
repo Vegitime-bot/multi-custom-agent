@@ -27,6 +27,11 @@ from backend.managers.chatbot_manager import ChatbotManager
 from backend.managers.memory_manager import MemoryManager
 from backend.managers.session_manager import SessionManager
 from backend.retrieval.ingestion_client import IngestionClient
+from backend.conversation.repository import (
+    ConversationLog,
+    ConversationRepository,
+    MockConversationRepository,
+)
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -322,11 +327,25 @@ async def chat(
     )
     logger.info(f"[Chat {request_id}] Executor: {executor.__class__.__name__}")
 
+    # Conversation logger
+    conv_repo = MockConversationRepository()
+
     # 6. SSE 스트리밍
     async def event_generator() -> AsyncGenerator[str, None]:
         full_response = []
         chunk_count = 0
         llm_start_time = time.time()
+        search_results_count = 0
+        confidence_score = None
+        delegated_to = None
+        
+        # Executor에서 추가 정보 추출 시도
+        if hasattr(executor, '_last_search_results'):
+            search_results_count = len(executor._last_search_results)
+        if hasattr(executor, '_last_confidence'):
+            confidence_score = executor._last_confidence
+        if hasattr(executor, '_last_delegated_to'):
+            delegated_to = executor._last_delegated_to
         
         try:
             for chunk in executor.execute(body.message, session.session_id):
@@ -348,6 +367,28 @@ async def chat(
         logger.info(f"[Chat {request_id}] 스트리밍 완료: {chunk_count} chunks, {llm_elapsed:.1f}s")
 
         yield sse_done()
+        
+        # 대화 기록 저장
+        try:
+            from datetime import datetime
+            conv_log = ConversationLog(
+                id=None,
+                session_id=session.session_id,
+                knox_id=user["knox_id"],
+                chatbot_id=body.chatbot_id,
+                user_message=body.message,
+                assistant_response="".join(full_response),
+                tokens_used=chunk_count * 4,  # Approximate
+                latency_ms=int(llm_elapsed * 1000),
+                search_results_count=search_results_count,
+                confidence_score=confidence_score,
+                delegated_to=delegated_to,
+                created_at=datetime.now(),
+            )
+            conv_repo.save(conv_log)
+            logger.info(f"[Chat {request_id}] 대화 기록 저장 완료")
+        except Exception as e:
+            logger.error(f"[Chat {request_id}] 대화 기록 저장 실패: {e}")
         
         total_elapsed = time.time() - start_time
         logger.info(f"[Chat {request_id}] ========== 완료 ({total_elapsed:.1f}s) ==========")

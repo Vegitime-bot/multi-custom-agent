@@ -263,14 +263,15 @@ class TestAdminPanel:
     # ========== 에러 처리 테스트 ==========
     
     def test_404_error_handling(self):
-        """TC-ADMIN-017: 존재하지 않는 챗봘 조회"""
-        response = requests.get(f"{BASE_URL}/admin/api/chatbots/non-existent")
+        """TC-ADMIN-017: 존재하지 않는 챗봘 삭제"""
+        response = requests.delete(f"{BASE_URL}/admin/api/chatbots/non-existent-99999")
         assert response.status_code == 404
         
     def test_invalid_chatbot_id_create(self):
-        """TC-ADMIN-018: 잘못된 ID로 생성 시도"""
+        """TC-ADMIN-018: 중복 ID로 생성 시도"""
+        # 이미 존재하는 ID로 생성 시도
         payload = {
-            "id": "",  # 빈 ID
+            "id": "chatbot-hr",  # 이미 존재하는 ID
             "name": "테스트",
             "description": "",
             "type": "standalone",
@@ -280,8 +281,8 @@ class TestAdminPanel:
         }
         
         response = requests.post(f"{BASE_URL}/admin/api/chatbots", json=payload)
-        # 빈 ID는 400 또는 422 오류 예상
-        assert response.status_code in [400, 422, 500]
+        # 중복 ID는 400 오류 예상
+        assert response.status_code == 400
         
     # ========== 권한 통합 테스트 ==========
     
