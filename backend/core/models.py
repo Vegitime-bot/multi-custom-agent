@@ -72,6 +72,7 @@ class ChatbotDef:
     memory: MemoryConfig
     system_prompt: str
     sub_chatbots: list[SubChatbotRef] = field(default_factory=list)
+    policy: dict = field(default_factory=dict)  # policy 설정 저장 (delegation_threshold 등)
 
     @classmethod
     def from_dict(cls, data: dict) -> "ChatbotDef":
@@ -104,6 +105,7 @@ class ChatbotDef:
                 ),
                 system_prompt=caps.get("system_prompt", ""),
                 sub_chatbots=data.get("sub_chatbots", []),
+                policy=policy,  # policy 저장
             )
         else:
             # 기존 구조: role/retrieval/llm/memory 방식 (하위호환)

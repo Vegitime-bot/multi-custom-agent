@@ -1,0 +1,20 @@
+{
+  "id": "chatbot-hr-policy",
+  "name": "인사정책 전문 챗봇",
+  "description": "인사 규정, 정책, 인사제도에 특화된 하위 전문가",
+  "active": true,
+  "capabilities": {
+    "db_ids": ["db_003", "db_hr_policy"],
+    "model": "kimi-k2.5:cloud",
+    "system_prompt": "당신은 사내 인사정책 전문 어시스턴트입니다.\n인사 규정, 채용, 평가, 승진, 직무, 인사제도 등에 대해 정확하게 안내해 주세요.\n검색된 인사 정책 문서를 기반으로 답변하세요.\n개인 의견은 배제하고 규정 내용만 안내하세요.\n답변은 한국어로 작성하세요."
+  },
+  "policy": {
+    "temperature": 0.2,
+    "max_tokens": 1024,
+    "stream": true,
+    "supported_modes": ["tool", "agent"],
+    "default_mode": "agent",
+    "max_messages": 20
+  },
+  "sub_chatbots": []
+}

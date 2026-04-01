@@ -1,0 +1,20 @@
+{
+  "id": "chatbot-hr-benefit",
+  "name": "복리후생 전문 챗봇",
+  "description": "급여, 복지, 휴가, 연차, 보상 등 복리후생에 특화된 하위 전문가",
+  "active": true,
+  "capabilities": {
+    "db_ids": ["db_003", "db_hr_benefit"],
+    "model": "kimi-k2.5:cloud",
+    "system_prompt": "당신은 사내 복리후생 전문 어시스턴트입니다.\n급여, 휴가, 연차, 복지제도, 보험, 경조사, 교육지원 등에 대해 정확하게 안내해 주세요.\n검색된 복리후생 문서를 기반으로 답변하세요.\n개인 의견은 배제하고 규정 내용만 안내하세요.\n답변은 한국어로 작성하세요."
+  },
+  "policy": {
+    "temperature": 0.2,
+    "max_tokens": 1024,
+    "stream": true,
+    "supported_modes": ["tool", "agent"],
+    "default_mode": "agent",
+    "max_messages": 20
+  },
+  "sub_chatbots": []
+}

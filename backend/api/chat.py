@@ -22,7 +22,7 @@ from backend.auth.mock_auth import get_current_user
 from backend.config import settings
 from backend.core.models import ExecutionRole
 from backend.debug_logger import logger
-from backend.executors import ToolExecutor, AgentExecutor
+from backend.executors import ToolExecutor, AgentExecutor, ParentAgentExecutor
 from backend.managers.chatbot_manager import ChatbotManager
 from backend.managers.memory_manager import MemoryManager
 from backend.managers.session_manager import SessionManager
@@ -140,10 +140,23 @@ def create_executor(
     chatbot_def,
     ingestion_client: IngestionClient,
     memory_manager: MemoryManager,
+    chatbot_manager=None,
 ):
-    """모드에 맞는 Executor 생성"""
+    """모드에 맞는 Executor 생성
+    
+    상위 챗봇(sub_chatbots 있음)은 ParentAgentExecutor 사용
+    """
     if mode == ExecutionRole.TOOL:
         return ToolExecutor(chatbot_def, ingestion_client)
+    
+    # Agent 모드: 하위 챗봇이 있으면 ParentAgentExecutor 사용
+    if chatbot_def.sub_chatbots:
+        return ParentAgentExecutor(
+            chatbot_def, 
+            ingestion_client, 
+            memory_manager,
+            chatbot_manager
+        )
     else:
         return AgentExecutor(chatbot_def, ingestion_client, memory_manager)
 
@@ -276,8 +289,10 @@ async def chat(
     
     logger.info(f"[Chat {request_id}] 권한 확인 완료")
 
-    # 6. Executor 생성
-    executor = create_executor(mode, chatbot_def, ingestion_client, memory_mgr)
+    # 6. Executor 생성 (상위 챗봇 체크)
+    executor = create_executor(
+        mode, chatbot_def, ingestion_client, memory_mgr, chatbot_mgr
+    )
     logger.info(f"[Chat {request_id}] Executor: {executor.__class__.__name__}")
 
     # 6. SSE 스트리밍

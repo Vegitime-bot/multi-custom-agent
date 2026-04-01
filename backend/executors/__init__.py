@@ -2,5 +2,6 @@
 from backend.executors.base_executor import BaseExecutor
 from backend.executors.tool_executor import ToolExecutor
 from backend.executors.agent_executor import AgentExecutor
+from backend.executors.parent_agent_executor import ParentAgentExecutor
 
-__all__ = ["BaseExecutor", "ToolExecutor", "AgentExecutor"]
+__all__ = ["BaseExecutor", "ToolExecutor", "AgentExecutor", "ParentAgentExecutor"]
