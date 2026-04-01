@@ -245,7 +245,22 @@
   });
 
   // ── 초기화 ───────────────────────────────────────────────────────
-  loadChatbots();
+  loadChatbots().then(() => {
+    // URL 파라미터로부터 챗봘 ID 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const chatbotId = urlParams.get('chatbot');
+    
+    if (chatbotId) {
+      // 해당 ID가 존재하면 선택
+      const option = Array.from(selector.options).find(opt => opt.value === chatbotId);
+      if (option) {
+        selector.value = chatbotId;
+        selector.dispatchEvent(new Event('change'));
+      } else {
+        addSystemMsg(`챗봘 "${chatbotId}"를 찾을 수 없습니다.`);
+      }
+    }
+  });
 </script>
 </body>
 </html>
