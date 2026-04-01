@@ -511,9 +511,11 @@ async def chat_agent(
     )
     logger.info(f"[Agent {request_id}] 세션: {session.session_id}")
 
-    # 4. Agent Executor 생성
-    executor = AgentExecutor(chatbot_def, ingestion_client, memory_mgr)
-    logger.info(f"[Agent {request_id}] AgentExecutor 생성")
+    # 4. Agent Executor 생성 (상위 챗봇 체크)
+    executor = create_executor(
+        ExecutionRole.AGENT, chatbot_def, ingestion_client, memory_mgr, chatbot_mgr
+    )
+    logger.info(f"[Agent {request_id}] Executor: {executor.__class__.__name__}")
 
     # 4. SSE 스트리밍
     async def event_generator() -> AsyncGenerator[str, None]:

@@ -140,6 +140,8 @@ class ParentAgentExecutor(AgentExecutor):
             'chatbot-tech-backend': ['backend', '백엔드', 'python', 'fastapi', 'django', 'db', 'sql', 'api', '서버'],
             'chatbot-tech-frontend': ['frontend', '프론트엔드', 'react', 'vue', 'javascript', 'css', 'html', 'ui', '화면'],
             'chatbot-tech-devops': ['devops', 'docker', 'kubernetes', 'k8s', 'ci/cd', 'infra', '배포', '모니터링', '인프라'],
+            'chatbot-rtl-verilog': ['rtl', 'verilog', 'fpga', '반도체', '디지털 회로', 'hdl', '합성'],
+            'chatbot-rtl-synthesis': ['synthesis', '합성', '타이밍', '최적화', ' 면적 ', '전력'],
         }
 
         message_lower = message.lower()

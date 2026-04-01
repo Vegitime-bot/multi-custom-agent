@@ -104,7 +104,14 @@ class ChatbotDef:
                     max_messages=policy.get("max_messages", 20),
                 ),
                 system_prompt=caps.get("system_prompt", ""),
-                sub_chatbots=data.get("sub_chatbots", []),
+                sub_chatbots=[
+                    SubChatbotRef(
+                        id=s["id"],
+                        level=s["level"],
+                        default_role=ExecutionRole(s["default_role"]),
+                    )
+                    for s in data.get("sub_chatbots", [])
+                ],
                 policy=policy,  # policy 저장
             )
         else:
