@@ -305,7 +305,6 @@ async def chat(
         llm_elapsed = time.time() - llm_start_time
         logger.info(f"[Chat {request_id}] 스트리밍 완료: {chunk_count} chunks, {llm_elapsed:.1f}s")
 
-        yield sse_event(session.session_id, event="session_id")
         yield sse_done()
         
         total_elapsed = time.time() - start_time
