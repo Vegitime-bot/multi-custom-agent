@@ -1,7 +1,7 @@
 from __future__ import annotations
 """
 executors/parent_agent_executor.py - 상위 Agent Executor (위임 기능 포함)
-신뢰도 기반으로 하위 Agent에게 위임하는 상위 Executor
+검색 결과 기반 신뢰도 계산 및 하위 Agent 위임
 """
 import re
 from typing import Generator
@@ -16,7 +16,7 @@ class ParentAgentExecutor(AgentExecutor):
     """
     상위 Agent Executor
     - 먼저 자체 DB로 답변 시도
-    - 신뢰도(confidence) 파싱
+    - 검색 결과 기반 신뢰도(confidence) 계산
     - threshold 미만 시 하위 Agent에게 위임
     """
 
@@ -25,7 +25,7 @@ class ParentAgentExecutor(AgentExecutor):
         chatbot_def: ChatbotDef,
         ingestion_client: IngestionClient,
         memory_manager: MemoryManager,
-        chatbot_manager=None,  # 하위 Agent 조회용
+        chatbot_manager=None,
     ):
         super().__init__(chatbot_def, ingestion_client, memory_manager)
         self.chatbot_manager = chatbot_manager
@@ -39,39 +39,74 @@ class ParentAgentExecutor(AgentExecutor):
         """
         상위 Agent 실행 + 위임 로직
         """
-        # 1. 먼저 상위 Agent로 응답 생성
-        full_response = []
-        confidence = 0
-
-        # 상위 Agent 응답 스트리밍
-        for chunk in self._execute_parent(message, session_id):
-            # Confidence 파싱
-            if "CONFIDENCE:" in chunk:
-                confidence = self._parse_confidence(chunk)
-            full_response.append(chunk)
-            yield chunk
-
-        # 2. Confidence 체크 및 위임 결정
+        # 1. RAG 검색 수행
+        context = self._retrieve(message, self.chatbot_def.retrieval.db_ids)
+        
+        # 2. 검색 결과 기반 Confidence 계산
+        confidence = self._calculate_confidence(context, message)
+        
+        # 3. Confidence 체크 및 실행 결정
         if confidence < self.delegation_threshold and self.chatbot_def.sub_chatbots:
-            # 하위 Agent 중 적합한 것 선택
+            # 위임 필요: 상위 Agent는 개요만 제공하고 하위에게 위임
+            yield f"📋 이 질문은 전문가 상담이 필요합니다.\n\n"
+            yield f"(상위 Agent 신뢰도: {confidence}% → 하위 Agent 위임)\n\n"
+            yield f"---\n📡 **전문가 챗봇을 호출합니다...**\n\n"
+            
+            # 하위 Agent 실행
             sub_chatbot = self._select_sub_chatbot(message)
             if sub_chatbot:
-                yield f"\n\n---\n📡 **{sub_chatbot.name}에게 위임합니다...**\n\n"
-                
-                # 하위 Agent 실행
-                for sub_chunk in self._delegate_to_sub(sub_chatbot, message, session_id):
+                yield f"**[{sub_chatbot.name}]**\n\n"
+                for sub_chunk in self._delegate_to_sub(sub_chatbot, message, session_id, context):
                     yield sub_chunk
+            else:
+                yield "❌ 적합한 하위 Agent를 찾을 수 없습니다.\n"
+                # 대신 상위 Agent로 폴백
+                for chunk in self._execute_with_context(message, session_id, context):
+                    yield chunk
+        else:
+            # 위임 불필요: 상위 Agent가 직접 답변
+            yield f"📢 **[{self.chatbot_def.name}]** (신뢰도: {confidence}%)\n\n"
+            for chunk in self._execute_with_context(message, session_id, context):
+                yield chunk
 
-    def _execute_parent(
+    def _calculate_confidence(self, context: str, message: str) -> int:
+        """
+        검색 결과 기반 Confidence 계산
+        
+        기준:
+        - 검색 결과 없음: 0-20%
+        - 검색 결과 있지만 관련도 낮음: 30-50%
+        - 검색 결과 충분: 60-100%
+        """
+        if not context or not context.strip():
+            return 15  # 검색 결과 없음
+        
+        # 검색 결과 분석
+        result_count = context.count('---') + context.count('**') // 2
+        content_length = len(context)
+        
+        # 메시지 키워드 매칭
+        keywords_found = sum(1 for kw in message.split() if len(kw) > 1 and kw.lower() in context.lower())
+        
+        # Confidence 계산
+        if result_count == 0 and content_length < 100:
+            return 20  # 거의 관련 없음
+        elif result_count <= 2 and keywords_found < 2:
+            return 40  # 관련도 낮음
+        elif result_count <= 3 and keywords_found < 3:
+            return 60  # 보통
+        else:
+            return 85  # 충분한 정보
+
+    def _execute_with_context(
         self,
         message: str,
         session_id: str,
+        context: str,
     ) -> Generator[str, None, None]:
-        """상위 Agent 기본 실행 (부모 클래스 활용)"""
-        # AgentExecutor의 기본 로직 사용
+        """주어진 컨텍스트로 Agent 실행"""
         history = self.memory.get_history(self.chatbot_def.id, session_id)
-        context = self._retrieve(message, self.chatbot_def.retrieval.db_ids)
-
+        
         messages = self._build_messages_with_history(
             system_prompt=self.chatbot_def.system_prompt,
             history=history,
@@ -84,7 +119,7 @@ class ParentAgentExecutor(AgentExecutor):
             full_response.append(chunk)
             yield chunk
 
-        # 상위 Agent 메모리 저장
+        # 메모리 저장
         self.memory.append_pair(
             chatbot_id=self.chatbot_def.id,
             session_id=session_id,
@@ -93,25 +128,18 @@ class ParentAgentExecutor(AgentExecutor):
             max_messages=self.chatbot_def.memory.max_messages,
         )
 
-    def _parse_confidence(self, text: str) -> int:
-        """Confidence 값 파싱 (CONFIDENCE: XX 형식)"""
-        match = re.search(r'CONFIDENCE:\s*(\d+)', text)
-        if match:
-            return int(match.group(1))
-        return 0
-
     def _select_sub_chatbot(self, message: str) -> ChatbotDef | None:
         """질문 내용에 따라 적합한 하위 Agent 선택"""
         if not self.chatbot_manager:
             return None
 
-        # 키워드 기반 매칭 (간단한 버전)
+        # 키워드 기반 매칭
         keywords_map = {
-            'chatbot-hr-policy': ['정책', '규정', '채용', '평가', '승진', '인사제도', '징계'],
-            'chatbot-hr-benefit': ['급여', '연차', '휴가', '복지', '보험', '경조사', '교육지원'],
-            'chatbot-tech-backend': ['backend', '백엔드', 'python', 'fastapi', 'django', 'db', 'sql', 'api'],
-            'chatbot-tech-frontend': ['frontend', '프론트엔드', 'react', 'vue', 'javascript', 'css', 'html', 'ui'],
-            'chatbot-tech-devops': ['devops', 'docker', 'kubernetes', 'k8s', 'ci/cd', 'infra', '배포', '모니터링'],
+            'chatbot-hr-policy': ['정책', '규정', '채용', '평가', '승진', '인사제도', '징계', '인사', '제도'],
+            'chatbot-hr-benefit': ['급여', '연차', '휴가', '복지', '보험', '경조사', '교육지원', '수당', '상여'],
+            'chatbot-tech-backend': ['backend', '백엔드', 'python', 'fastapi', 'django', 'db', 'sql', 'api', '서버'],
+            'chatbot-tech-frontend': ['frontend', '프론트엔드', 'react', 'vue', 'javascript', 'css', 'html', 'ui', '화면'],
+            'chatbot-tech-devops': ['devops', 'docker', 'kubernetes', 'k8s', 'ci/cd', 'infra', '배포', '모니터링', '인프라'],
         }
 
         message_lower = message.lower()
@@ -125,7 +153,11 @@ class ParentAgentExecutor(AgentExecutor):
 
             # 키워드 매칭 점수 계산
             keywords = keywords_map.get(sub_ref.id, [])
-            score = sum(1 for kw in keywords if kw.lower() in message_lower)
+            score = sum(2 for kw in keywords if kw.lower() in message_lower)
+            
+            # 하위 챗봇 이름/설명에서도 매칭
+            if sub_def.name.lower() in message_lower or any(kw in sub_def.description.lower() for kw in message_lower.split()):
+                score += 3
 
             if score > best_score:
                 best_score = score
@@ -143,15 +175,22 @@ class ParentAgentExecutor(AgentExecutor):
         sub_chatbot: ChatbotDef,
         message: str,
         session_id: str,
+        parent_context: str = "",
     ) -> Generator[str, None, None]:
         """하위 Agent에게 위임 실행"""
         from backend.executors import AgentExecutor
 
+        # 상위 컨텍스트를 포함하여 하위 Agent 실행
         sub_executor = AgentExecutor(
             sub_chatbot,
             self.ingestion,
             self.memory
         )
+        
+        # 하위 Agent에 추가 컨텍스트 제공
+        enhanced_message = message
+        if parent_context:
+            enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
-        for chunk in sub_executor.execute(message, session_id):
+        for chunk in sub_executor.execute(enhanced_message, session_id):
             yield chunk

@@ -74,18 +74,42 @@ MOCK_USER_PERMISSIONS = {
         "chatbot-b": {"access": True, "allowed_modes": ["tool"]},  # Tool만
         "chatbot-c": {"access": False, "allowed_modes": []},  # 접근 불가
         "chatbot-d": {"access": True, "allowed_modes": ["tool", "agent"]},
+        # 상위/하위 챗봇 권한
+        "chatbot-hr": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-hr-policy": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-hr-benefit": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech-backend": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech-frontend": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech-devops": {"access": True, "allowed_modes": ["tool", "agent"]},
     },
     "user-002": {  # 관리자
         "chatbot-a": {"access": True, "allowed_modes": ["tool", "agent"]},
         "chatbot-b": {"access": True, "allowed_modes": ["tool", "agent"]},
         "chatbot-c": {"access": True, "allowed_modes": ["tool", "agent"]},
         "chatbot-d": {"access": True, "allowed_modes": ["tool", "agent"]},
+        # 상위/하위 챗봇 권한 (전체 접근)
+        "chatbot-hr": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-hr-policy": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-hr-benefit": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech-backend": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech-frontend": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-tech-devops": {"access": True, "allowed_modes": ["tool", "agent"]},
     },
     "system": {  # 시스템 계정 (내부 호출용)
         "chatbot-a": {"access": True, "allowed_modes": ["tool"]},
         "chatbot-b": {"access": True, "allowed_modes": ["tool"]},
         "chatbot-c": {"access": True, "allowed_modes": ["tool"]},
         "chatbot-d": {"access": True, "allowed_modes": ["tool"]},
+        # 상위/하위 챗봇 권한
+        "chatbot-hr": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-hr-policy": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-hr-benefit": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-tech": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-tech-backend": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-tech-frontend": {"access": True, "allowed_modes": ["tool"]},
+        "chatbot-tech-devops": {"access": True, "allowed_modes": ["tool"]},
     },
 }
 
