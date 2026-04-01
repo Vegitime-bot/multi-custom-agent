@@ -490,7 +490,6 @@ async def chat_agent(
             yield sse_error(f"실행 오류: {str(e)}")
             return
 
-        yield sse_event(session.session_id, event="session_id")
         yield sse_done()
         logger.info(f"[Agent {request_id}] 완료 ({len(''.join(full_response))}자)")
 
