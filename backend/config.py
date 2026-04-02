@@ -43,6 +43,10 @@ class Settings:
     LLM_API_KEY: str = os.getenv("LLM_API_KEY", "dummy-key")
     LLM_DEFAULT_MODEL: str = os.getenv("LLM_DEFAULT_MODEL", "GLM4.7")
     LLM_TIMEOUT: int = int(os.getenv("LLM_TIMEOUT", "120"))
+    
+    # ── LLM 기본 설정 (모든 챗봇 공통) ───────────────────────────
+    LLM_DEFAULT_TEMPERATURE: float = float(os.getenv("LLM_DEFAULT_TEMPERATURE", "0.3"))
+    LLM_DEFAULT_MAX_TOKENS: int = int(os.getenv("LLM_DEFAULT_MAX_TOKENS", "1024"))
 
     # ── Ingestion 서버 ────────────────────────────────────────────
     INGESTION_BASE_URL: str = os.getenv("INGESTION_BASE_URL", "http://localhost:8001")

@@ -73,6 +73,9 @@ def stream_chat(
         stream=True,
     )
     for chunk in response:
+        # choices가 비어있는 경우 처리 (사내 LLM 특이 케이스)
+        if not chunk.choices:
+            continue
         delta = chunk.choices[0].delta
         if delta.content:
             yield delta.content

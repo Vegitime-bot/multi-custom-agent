@@ -31,15 +31,16 @@ class LLMConfig:
     stream: bool = True
 
     @classmethod
-    def from_dict(cls, data: dict, default_model: str = "kimi-k2.5:cloud") -> "LLMConfig":
-        """LLMConfig 생성 - model이 없으면 default_model 사용"""
+    def from_dict(cls, data: dict) -> "LLMConfig":
+        """LLMConfig 생성 - model이 없으면 settings에서 가져옴"""
+        from backend.config import settings
         model = data.get("model")
         if not model:  # None, "", 빈값 모두 체크
-            model = default_model
+            model = settings.LLM_DEFAULT_MODEL
         return cls(
             model=model,
-            temperature=data.get("temperature", 0.3),
-            max_tokens=data.get("max_tokens", 1024),
+            temperature=data.get("temperature", settings.LLM_DEFAULT_TEMPERATURE),
+            max_tokens=data.get("max_tokens", settings.LLM_DEFAULT_MAX_TOKENS),
             stream=data.get("stream", True),
         )
 
