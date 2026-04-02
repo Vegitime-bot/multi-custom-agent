@@ -64,7 +64,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
     # 키워드 기반 매칭 (하위 호환 유지)
     KEYWORDS_MAP = {
         'chatbot-hr-policy': ['정책', '규정', '채용', '평가', '승진', '인사제도', '징계', '인사', '제도'],
-        'chatbot-hr-benefit': ['급여', '연차', '휴가', '복지', '보험', '경조사', '교육지원', '수당', '상여'],
+        'chatbot-hr': ['인사', 'hr', '복리후생', '인사팀', '인사관리', '사내', '회사'],
+        'chatbot-hr-benefit': ['급여', '연차', '휴가', '복지', '보험', '경조사', '교육지원', '수당', '상여', '복리후생', '의료비', '대출', '자금'],
         'chatbot-tech-backend': ['backend', '백엔드', 'python', 'fastapi', 'django', 'db', 'sql', 'api', '서버'],
         'chatbot-tech-frontend': ['frontend', '프론트엔드', 'react', 'vue', 'javascript', 'css', 'html', 'ui', '화면'],
         'chatbot-tech-devops': ['devops', 'docker', 'kubernetes', 'k8s', 'ci/cd', 'infra', '배포', '모니터링', '인프라'],
