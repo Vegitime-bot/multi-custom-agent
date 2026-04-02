@@ -13,6 +13,7 @@ executors/hierarchical_agent_executor.py - 계층적 Agent Executor (3-tier hier
 import re
 import asyncio
 import os
+import logging
 from typing import Generator, Optional, List, Tuple, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -22,6 +23,10 @@ from backend.managers.memory_manager import MemoryManager
 from backend.retrieval.ingestion_client import IngestionClient
 from backend.services.embedding_service import get_embedding_service
 from backend.llm.client import get_llm_client
+
+# 로거 설정
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def get_hybrid_score_threshold() -> float:
@@ -126,8 +131,16 @@ class HierarchicalAgentExecutor(AgentExecutor):
               - 부모 있으면 부모로 위임
               - 부모 없으면 (Root) 최종 시도 또는 실패
         """
+        logger.info(f"[EXECUTE] Chatbot: {self.chatbot_def.name} (ID: {self.chatbot_def.id})")
+        logger.info(f"[EXECUTE] Message: {message[:50]}...")
+        logger.info(f"[EXECUTE] Session: {session_id}")
+        logger.info(f"[EXECUTE] Delegation depth: {self.delegation_depth}")
+        logger.info(f"[EXECUTE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}")
+        logger.info(f"[EXECUTE] Parent ID: {self.chatbot_def.parent_id}")
+        
         # 위임 깊이 초과 체크
         if self.delegation_depth >= self.MAX_DELEGATION_DEPTH:
+            logger.warning(f"[EXECUTE] Max delegation depth exceeded: {self.delegation_depth}")
             yield f"⚠️ 최대 위임 깊이({self.MAX_DELEGATION_DEPTH})를 초과했습니다. "
             yield f"현재 Agent [{self.chatbot_def.name}]가 최선의 답변을 제공합니다.\n\n"
             for chunk in self._execute_with_context(message, session_id, ""):
@@ -136,12 +149,15 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         # 1. RAG 검색 수행
         context = self._retrieve(message, self.chatbot_def.retrieval.db_ids)
+        logger.info(f"[EXECUTE] Retrieved context length: {len(context)} chars")
+        logger.info(f"[EXECUTE] DB IDs: {self.chatbot_def.retrieval.db_ids}")
         
         # 누적 컨텍스트 결합 (상위에서 전달된 컨텍스트가 있으면 결합)
         combined_context = self._combine_contexts(self.accumulated_context, context)
         
         # 2. 검색 결과 기반 Confidence 계산
         confidence = self._calculate_confidence(combined_context, message)
+        logger.info(f"[EXECUTE] Confidence: {confidence}% (threshold: {self.delegation_threshold}%)")
         
         # 3. Confidence 체크 및 위임 결정
         if confidence < self.delegation_threshold:
@@ -197,14 +213,20 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """하위 챗봇으로 위임 (기존 동행 개선)"""
+        logger.info(f"[DELEGATE] Starting sub delegation from {self.chatbot_def.name}")
+        logger.info(f"[DELEGATE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}")
+        
         yield f"📋 이 질문은 전문가 상담이 필요합니다.\n\n"
         yield f"({self.chatbot_def.name} 신뢰도: {confidence}% → 하위 Agent 위임)\n\n"
         yield f"---\n📡 **전문가 챗봇을 호출합니다...**\n\n"
         
         if self.multi_sub_execution:
+            logger.info(f"[DELEGATE] Multi-sub execution enabled")
             # 다중 하위 Agent 선택 및 실행
             sub_candidates = self._select_sub_chatbot_hybrid_multi(message)
-            if sub_candidates:
+            logger.info(f"[DELEGATE] Selected {len(sub_candidates)} candidates")
+            for chatbot, info, scores in sub_candidates:
+                logger.info(f"[DELEGATE]   - {chatbot.name} (ID: {chatbot.id}): hybrid={scores['hybrid']:.3f}, kw={scores['keyword']:.3f}, emb={scores['embedding']:.3f}")
                 yield f"**선택된 전문가**: {', '.join([c[0].name for c in sub_candidates])}\n\n"
                 
                 # 다중 하위 Agent 실행
