@@ -19,10 +19,15 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class IngestionClient:
-    def __init__(self, base_url: str | None = None):
+    def __init__(self, base_url: str | None = None, api_key: str | None = None):
         self._base_url = (base_url or settings.INGESTION_BASE_URL).rstrip("/")
+        self._api_key = api_key or settings.INGESTION_API_KEY
         self._session = requests.Session()
         self._session.verify = settings.SSL_VERIFY
+        
+        # API 키가 있으면 헤더에 추가
+        if self._api_key:
+            self._session.headers.update({"API_KEY": self._api_key})
 
     def search(
         self,

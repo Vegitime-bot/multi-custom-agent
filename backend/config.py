@@ -50,6 +50,7 @@ class Settings:
 
     # ── Ingestion 서버 ────────────────────────────────────────────
     INGESTION_BASE_URL: str = os.getenv("INGESTION_BASE_URL", "http://localhost:8001")
+    INGESTION_API_KEY: str = os.getenv("INGESTION_API_KEY", "")
 
     # ── SSL ──────────────────────────────────────────────────────
     SSL_VERIFY: bool = os.getenv("SSL_VERIFY", "false").lower() == "true"
