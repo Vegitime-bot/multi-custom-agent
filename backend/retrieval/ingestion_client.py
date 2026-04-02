@@ -25,9 +25,9 @@ class IngestionClient:
         self._session = requests.Session()
         self._session.verify = settings.SSL_VERIFY
         
-        # API 키가 있으면 헤더에 추가
+        # API 키가 있으면 헤더에 추가 (x-api-key 형식)
         if self._api_key:
-            self._session.headers.update({"API_KEY": self._api_key})
+            self._session.headers.update({"x-api-key": self._api_key})
 
     def search(
         self,

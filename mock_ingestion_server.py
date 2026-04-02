@@ -104,7 +104,7 @@ def _search_index(index_name: str, query: str, top_k: int, threshold: float) -> 
 @app.post("/search")
 async def search(
     req: SearchRequest,
-    api_key: Optional[str] = Header(None, alias="API_KEY")
+    api_key: Optional[str] = Header(None, alias="x-api-key")
 ):
     """
     통합 검색 API
