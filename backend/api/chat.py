@@ -136,6 +136,9 @@ def check_chatbot_access(permissions: dict, chatbot_id: str) -> bool:
     # Test chatbots always allowed
     if chatbot_id.startswith("test-"):
         return True
+    # Mock mode: allow all chatbots by default (for development)
+    if settings.USE_MOCK_AUTH:
+        return True
     bot_perm = permissions.get(chatbot_id, {})
     return bot_perm.get("access", False)
 
