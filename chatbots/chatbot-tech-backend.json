@@ -16,5 +16,7 @@
     "default_mode": "agent",
     "max_messages": 20
   },
-  "sub_chatbots": []
+  "sub_chatbots": [],
+  "parent_id": "chatbot-tech",
+  "level": 2
 }

@@ -46,7 +46,9 @@ async def list_chatbots(
             "description": cb.description,
             "active": cb.active,
             "db_ids": cb.retrieval.db_ids,
-            "sub_chatbots": [s.id for s in cb.sub_chatbots] if cb.sub_chatbots else [],
+            "sub_chatbots": [{"id": s.id, "level": s.level, "default_role": s.default_role.value} for s in cb.sub_chatbots] if cb.sub_chatbots else [],
+            "parent_id": cb.parent_id,
+            "level": cb.level,
         }
 
         # 타입 결정
@@ -59,7 +61,10 @@ async def list_chatbots(
                 info["parent"] = parent_id
             else:
                 info["type"] = "standalone"
-
+        
+        if cb.policy:
+            info["policy"] = cb.policy
+        
         result.append(info)
 
     return result
@@ -98,28 +103,54 @@ async def create_chatbot(
             "model": request.get("model", "kimi-k2.5:cloud"),
             "system_prompt": request.get("system_prompt", "당신은 도움이 되는 어시스턴트입니다."),
         },
-        "policy": {
+        "policy": request.get("policy", {
             "temperature": 0.3,
             "max_tokens": 1024,
             "stream": True,
             "supported_modes": ["tool", "agent"],
             "default_mode": "agent",
             "max_messages": 20,
-        },
+        }),
         "sub_chatbots": [],
     }
 
-    # 하위 Agent → 상위 Agent JSON에 참조 추가
-    if request.get("type") == "child" and request.get("parent"):
-        parent_file = chatbots_dir / f"{request['parent']}.json"
+    # 3-tier hierarchy support: parent_id and level
+    if request.get("parent_id") is not None:
+        chatbot_json["parent_id"] = request["parent_id"]
+    if "level" in request:
+        chatbot_json["level"] = request["level"]
+
+    # Validate max depth
+    if request.get("level", 0) > 5:
+        raise HTTPException(400, "Maximum hierarchy depth exceeded (max level: 5)")
+
+    # sub_chatbots 처리 (객체 리스트 형태 지원)
+    if "sub_chatbots" in request:
+        sub_chatbots = []
+        for sub in request["sub_chatbots"]:
+            if isinstance(sub, dict):
+                sub_chatbots.append({
+                    "id": sub.get("id"),
+                    "level": sub.get("level", 1),
+                    "default_role": sub.get("default_role", "agent")
+                })
+            elif isinstance(sub, str):
+                sub_chatbots.append(sub)
+        chatbot_json["sub_chatbots"] = sub_chatbots
+
+    # 하위 Agent → 상위 Agent JSON에 참조 추가 (type=child일 때)
+    parent_id = request.get("parent") or request.get("parent_id")
+    if (request.get("type") == "child" or request.get("parent_id")) and parent_id:
+        parent_file = chatbots_dir / f"{parent_id}.json"
         if parent_file.exists():
             parent_data = json.loads(parent_file.read_text(encoding="utf-8"))
             if "sub_chatbots" not in parent_data:
                 parent_data["sub_chatbots"] = []
-            existing = [s["id"] for s in parent_data["sub_chatbots"] if isinstance(s, dict)]
+            existing = [s["id"] if isinstance(s, dict) else s for s in parent_data["sub_chatbots"]]
             if request["id"] not in existing:
+                level = request.get("level", 1)
                 parent_data["sub_chatbots"].append(
-                    {"id": request["id"], "level": 1, "default_role": "agent"}
+                    {"id": request["id"], "level": level, "default_role": "agent"}
                 )
                 parent_file.write_text(
                     json.dumps(parent_data, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -129,6 +160,78 @@ async def create_chatbot(
     chatbot_mgr.reload()
 
     return {"status": "success", "id": request["id"]}
+
+
+# ── 챗봇 수정 ────────────────────────────────────────────────────
+@router.put("/admin/api/chatbots/{chatbot_id}")
+async def update_chatbot(
+    chatbot_id: str,
+    request: dict,
+    chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
+) -> dict:
+    """챗봇 정의를 수정한다."""
+    chatbots_dir = chatbot_mgr._dir
+    file_path = chatbots_dir / f"{chatbot_id}.json"
+    
+    if not file_path.exists():
+        raise HTTPException(404, f"챗봇 '{chatbot_id}'를 찾을 수 없습니다")
+    
+    # 기존 데이터 로드
+    existing_data = json.loads(file_path.read_text(encoding="utf-8"))
+    
+    # 새 데이터로 업데이트 (필드별 병합)
+    updated_data = {
+        "id": request.get("id", chatbot_id),
+        "name": request.get("name", existing_data.get("name", "")),
+        "description": request.get("description", existing_data.get("description", "")),
+        "active": request.get("active", existing_data.get("active", True)),
+        "capabilities": existing_data.get("capabilities", {}),
+        "policy": existing_data.get("policy", {}),
+        "sub_chatbots": [],
+    }
+    
+    # capabilities 업데이트
+    if "capabilities" in request:
+        updated_data["capabilities"].update(request["capabilities"])
+    
+    # policy 업데이트
+    if "policy" in request:
+        updated_data["policy"].update(request["policy"])
+    
+    # sub_chatbots 처리 (객체 리스트 형태 지원)
+    if "sub_chatbots" in request:
+        sub_chatbots = []
+        for sub in request["sub_chatbots"]:
+            if isinstance(sub, dict):
+                sub_chatbots.append({
+                    "id": sub.get("id"),
+                    "level": sub.get("level", 1),
+                    "default_role": sub.get("default_role", "agent")
+                })
+            elif isinstance(sub, str):
+                sub_chatbots.append(sub)
+        updated_data["sub_chatbots"] = sub_chatbots
+    else:
+        updated_data["sub_chatbots"] = existing_data.get("sub_chatbots", [])
+    
+    # 3-tier hierarchy 필드
+    if "parent_id" in request:
+        updated_data["parent_id"] = request["parent_id"]
+    elif "parent_id" in existing_data:
+        updated_data["parent_id"] = existing_data["parent_id"]
+    
+    if "level" in request:
+        updated_data["level"] = request["level"]
+    elif "level" in existing_data:
+        updated_data["level"] = existing_data["level"]
+    
+    # 파일 저장
+    file_path.write_text(json.dumps(updated_data, ensure_ascii=False, indent=2), encoding="utf-8")
+    
+    # 메모리 상태 갱신
+    chatbot_mgr.reload()
+    
+    return {"status": "success", "id": chatbot_id}
 
 
 # ── 챗봘 삭제 ────────────────────────────────────────────────────

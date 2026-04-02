@@ -4,10 +4,9 @@ core/models.py - 도메인 모델
 ChatbotDef, Session, Message, ExecutionContext 등 핵심 데이터 구조를 정의한다.
 """
 
-
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 
 # ── 실행 역할 ──────────────────────────────────────────────────────
@@ -53,7 +52,7 @@ class MemoryConfig:
 
 @dataclass
 class SubChatbotRef:
-    """상위 챗봇이 참조하는 하위 챗봇 정보"""
+    """상위 챗봇이 참조하는 하위 챗봇 정보 (하위호환)"""
     id: str
     level: int
     default_role: ExecutionRole
@@ -61,7 +60,13 @@ class SubChatbotRef:
 
 @dataclass
 class ChatbotDef:
-    """관리자가 선언형으로 등록한 챗봇 명세"""
+    """관리자가 선언형으로 등록한 챗봇 명세
+    
+    3-tier hierarchy 지원 (v2):
+    - parent_id: 부모 챗봇 ID (None이면 Root)
+    - level: 계층 레벨 (0=Root, 1=Parent, 2=Child, ...)
+    - sub_chatbots: 하위 챗봇 참조 (하위호환 유지)
+    """
     id: str
     name: str
     description: str
@@ -73,6 +78,20 @@ class ChatbotDef:
     system_prompt: str
     sub_chatbots: list[SubChatbotRef] = field(default_factory=list)
     policy: dict = field(default_factory=dict)  # policy 설정 저장 (delegation_threshold 등)
+    
+    # 3-tier hierarchy support (v2)
+    parent_id: Optional[str] = None  # 부모 챗봇 ID (None이면 Root)
+    level: int = 0  # 계층 레벨 (0=Root, 1=Parent, 2=Child, ...)
+
+    @property
+    def is_leaf(self) -> bool:
+        """Leaf 노드 여부 (하위 챗봇이 없음)"""
+        return len(self.sub_chatbots) == 0
+    
+    @property
+    def is_root(self) -> bool:
+        """Root 노드 여부 (부모가 없음)"""
+        return self.parent_id is None
 
     @classmethod
     def from_dict(cls, data: dict) -> "ChatbotDef":
@@ -80,7 +99,7 @@ class ChatbotDef:
         if "capabilities" in data and "policy" in data:
             # 새 구조: capabilities/policy 방식
             caps = data["capabilities"]
-            policy = data["policy"]
+            policy = data.get("policy", {})
             
             return cls(
                 id=data["id"],
@@ -113,6 +132,9 @@ class ChatbotDef:
                     for s in data.get("sub_chatbots", [])
                 ],
                 policy=policy,  # policy 저장
+                # 3-tier hierarchy support
+                parent_id=data.get("parent_id"),
+                level=data.get("level", 0),
             )
         else:
             # 기존 구조: role/retrieval/llm/memory 방식 (하위호환)
@@ -141,10 +163,13 @@ class ChatbotDef:
                     )
                     for s in data.get("sub_chatbots", [])
                 ],
+                # 3-tier hierarchy support (기존 데이터에서도 읽기)
+                parent_id=data.get("parent_id"),
+                level=data.get("level", 0),
             )
 
     def to_dict(self) -> dict:
-        return {
+        result = {
             "id":          self.id,
             "name":        self.name,
             "description": self.description,
@@ -170,7 +195,16 @@ class ChatbotDef:
                 {"id": s.id, "level": s.level, "default_role": s.default_role.value}
                 for s in self.sub_chatbots
             ],
+            # 3-tier hierarchy support
+            "parent_id": self.parent_id,
+            "level": self.level,
         }
+        
+        # Optional fields only include if set
+        if self.policy:
+            result["policy"] = self.policy
+            
+        return result
 
 
 # ── 메시지 ─────────────────────────────────────────────────────────

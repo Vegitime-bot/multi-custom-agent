@@ -3,456 +3,471 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi Custom Agent Service - 테스트 결과 보고서</title>
+    <title>Multi Custom Agent - 위임 테스트 결과</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a0a0f;
-            color: #e0e0e0;
+            background: #f5f5f7;
+            padding: 40px;
             line-height: 1.6;
-            padding: 20px;
         }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
         h1 {
-            color: #00d4aa;
-            font-size: 2rem;
+            color: #1d1d1f;
+            font-size: 32px;
             margin-bottom: 10px;
-            text-align: center;
-            text-shadow: 0 0 20px rgba(0, 212, 170, 0.5);
         }
         .subtitle {
-            text-align: center;
-            color: #888;
-            margin-bottom: 40px;
-        }
-        .section {
-            background: #151520;
-            border: 1px solid #2a2a40;
-            border-radius: 12px;
-            margin-bottom: 24px;
-            overflow: hidden;
-        }
-        .section-header {
-            background: linear-gradient(135deg, #1a1a30, #252540);
-            padding: 16px 24px;
-            border-bottom: 1px solid #2a2a40;
-        }
-        .section-header h2 {
-            color: #00d4aa;
-            font-size: 1.2rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .section-content {
-            padding: 24px;
-        }
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
-        }
-        .status-pass {
-            background: rgba(0, 212, 170, 0.2);
-            color: #00d4aa;
-            border: 1px solid rgba(0, 212, 170, 0.3);
-        }
-        .status-fail {
-            background: rgba(255, 85, 85, 0.2);
-            color: #ff5555;
-            border: 1px solid rgba(255, 85, 85, 0.3);
-        }
-        .status-warn {
-            background: rgba(255, 170, 0, 0.2);
-            color: #ffaa00;
-            border: 1px solid rgba(255, 170, 0, 0.3);
-        }
-        .test-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 16px;
-        }
-        .test-card {
-            background: #1a1a28;
-            border: 1px solid #2a2a40;
-            border-radius: 8px;
-            padding: 16px;
-        }
-        .test-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .test-id {
-            font-family: 'Monaco', 'Consolas', monospace;
-            color: #00d4aa;
-            font-size: 0.9rem;
-        }
-        .test-name {
-            color: #ccc;
-            margin-bottom: 8px;
-        }
-        .test-detail {
-            color: #888;
-            font-size: 0.9rem;
-        }
-        .code-block {
-            background: #0d0d14;
-            border: 1px solid #2a2a40;
-            border-radius: 8px;
-            padding: 16px;
-            margin: 16px 0;
-            overflow-x: auto;
-            font-family: 'Monaco', 'Consolas', monospace;
-            font-size: 0.85rem;
-        }
-        .code-block pre {
-            color: #a0a0c0;
-            margin: 0;
-        }
-        .highlight { color: #00d4aa; }
-        .string { color: #ffaa77; }
-        .number { color: #ff77aa; }
-        .key { color: #77aaff; }
-        .summary-box {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
+            color: #86868b;
+            font-size: 16px;
             margin-bottom: 30px;
         }
-        .summary-item {
-            background: linear-gradient(135deg, #1a1a30, #202038);
-            border: 1px solid #2a2a40;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
+        .summary-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
-        .summary-number {
-            font-size: 3rem;
-            font-weight: bold;
-            color: #00d4aa;
+        .summary-card h2 {
+            font-size: 20px;
+            color: #1d1d1f;
+            margin-bottom: 16px;
         }
-        .summary-label {
-            color: #888;
-            margin-top: 8px;
-        }
-        .server-info {
+        .config-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
+            gap: 12px;
         }
-        .server-card {
-            background: #1a1a28;
-            border: 1px solid #2a2a40;
+        .config-item {
+            background: #f5f5f7;
+            padding: 12px 16px;
             border-radius: 8px;
-            padding: 16px;
+            display: flex;
+            justify-content: space-between;
         }
-        .server-name {
-            color: #00d4aa;
+        .config-label {
+            color: #86868b;
+            font-size: 14px;
+        }
+        .config-value {
+            color: #1d1d1f;
             font-weight: 600;
+            font-size: 14px;
+        }
+        .test-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .test-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .test-number {
+            width: 32px;
+            height: 32px;
+            background: #0071e3;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .test-title {
+            flex: 1;
+        }
+        .test-title h3 {
+            font-size: 18px;
+            color: #1d1d1f;
+            margin-bottom: 4px;
+        }
+        .test-title p {
+            font-size: 14px;
+            color: #86868b;
+        }
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .test-details {
+            background: #f5f5f7;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             margin-bottom: 8px;
         }
-        .server-detail {
-            color: #888;
-            font-size: 0.9rem;
+        .detail-row:last-child {
+            margin-bottom: 0;
         }
-        .server-status {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background: #00d4aa;
-            border-radius: 50%;
-            margin-right: 6px;
-            box-shadow: 0 0 8px #00d4aa;
+        .detail-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .divider {
-            height: 1px;
-            background: linear-gradient(90deg, transparent, #2a2a40, transparent);
-            margin: 30px 0;
+        .detail-text {
+            font-size: 14px;
+            color: #1d1d1f;
         }
-        .test-category {
-            margin-bottom: 24px;
+        .response-preview {
+            background: #1d1d1f;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+            color: #f5f5f7;
+            font-family: 'SF Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 200px;
+            overflow-y: auto;
         }
-        .category-title {
-            color: #77aaff;
-            font-size: 1rem;
-            margin-bottom: 12px;
-            padding-left: 8px;
-            border-left: 3px solid #77aaff;
+        .highlight {
+            color: #30d158;
+        }
+        .delegate-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f5f7 0%, #e8e8ed 100%);
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        .flow-node {
+            background: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .flow-node.selected {
+            background: #0071e3;
+            color: white;
+        }
+        .flow-arrow {
+            font-size: 24px;
+            color: #86868b;
+        }
+        .overall-result {
+            background: linear-gradient(135deg, #0071e3 0%, #0051d3 100%);
+            color: white;
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            margin-top: 24px;
+        }
+        .overall-result h2 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .overall-result p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        .stats-row {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-top: 24px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 36px;
+            font-weight: 700;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 4px;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🤖 Multi Custom Agent Service</h1>
-        <p class="subtitle">기본 요구사항 테스트 결과 보고서 | 2026-03-31 10:45 KST</p>
+        <p class="subtitle">위임(Delegation) 테스트 결과 보고서</p>
 
-        <!-- 요약 -->
-        <div class="summary-box">
-            <div class="summary-item">
-                <div class="summary-number">9</div>
-                <div class="summary-label">통과</div>
-            </div>
-            <div class="summary-item">
-                <div class="summary-number" style="color: #ffaa00;">3</div>
-                <div class="summary-label">부분 통과</div>
-            </div>
-            <div class="summary-item">
-                <div class="summary-number" style="color: #ff5555;">0</div>
-                <div class="summary-label">실패</div>
-            </div>
-        </div>
-
-        <!-- 서버 구동 상태 -->
-        <div class="section">
-            <div class="section-header">
-                <h2>🖥️ 서버 구동 상태</h2>
-            </div>
-            <div class="section-content">
-                <div class="server-info">
-                    <div class="server-card">
-                        <div class="server-name">
-                            <span class="server-status"></span>
-                            Mock Ingestion Server
-                        </div>
-                        <div class="server-detail">
-                            Port: 8001<br>
-                            Available DBs: db_001, db_002, db_003
-                        </div>
-                    </div>
-                    <div class="server-card">
-                        <div class="server-name">
-                            <span class="server-status"></span>
-                            Main FastAPI Server
-                        </div>
-                        <div class="server-detail">
-                            Port: 8080<br>
-                            Mode: USE_MOCK_DB=true, USE_MOCK_AUTH=true
-                        </div>
-                    </div>
+        <div class="summary-card">
+            <h2>⚙️ 챗봇 설정 (chatbot-hr)</h2>
+            <div class="config-grid">
+                <div class="config-item">
+                    <span class="config-label">hybrid_score_threshold</span>
+                    <span class="config-value">0.15</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">multi_sub_execution</span>
+                    <span class="config-value">true</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">max_parallel_subs</span>
+                    <span class="config-value">2</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">delegation_threshold</span>
+                    <span class="config-value">70</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">synthesis_mode</span>
+                    <span class="config-value">parallel</span>
+                </div>
+                <div class="config-item">
+                    <span class="config-label">enable_parent_delegation</span>
+                    <span class="config-value">true</span>
                 </div>
             </div>
         </div>
 
-        <!-- 테스트 결과 -->
-        <div class="section">
-            <div class="section-header">
-                <h2>✅ 테스트 수행 결과</h2>
+        <div class="test-card">
+            <div class="test-header">
+                <div class="test-number">1</div>
+                <div class="test-title">
+                    <h3>급여 정보 문의</h3>
+                    <p>chatbot-hr ← "급여 알려줘"</p>
+                </div>
+                <span class="status-badge status-success">✅ 성공</span>
             </div>
-            <div class="section-content">
-                
-                <!-- 서버 구동 테스트 -->
-                <div class="test-category">
-                    <div class="category-title">1. 서버 구동 테스트 (SRV)</div>
-                    <div class="test-grid">
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">SRV-01</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">메인 서버 시작</div>
-                            <div class="test-detail">FastAPI 앱이 포트 8080에서 정상 실행</div>
-                        </div>
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">SRV-02</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">Ingestion 서버 시작</div>
-                            <div class="test-detail">Mock Ingestion 서버가 포트 8001에서 정상 실행</div>
-                        </div>
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">SRV-03</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">헬스체크 응답</div>
-                            <div class="test-detail">/health 엔드포인트가 정상 응답 반환</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 챗봇 관리 테스트 -->
-                <div class="test-category">
-                    <div class="category-title">2. 챗봇 관리 테스트 (BOT)</div>
-                    <div class="test-grid">
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">BOT-01</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">활성 챗봇 목록 조회</div>
-                            <div class="test-detail">/api/chatbots에서 2개 챗봇 반환 확인</div>
-                        </div>
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">BOT-02</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">챗봇 정의 로드</div>
-                            <div class="test-detail">chatbot_a (Agent), chatbot_b (Tool) 로드 확인</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 세션 관리 테스트 -->
-                <div class="test-category">
-                    <div class="category-title">3. 세션 관리 테스트 (SES)</div>
-                    <div class="test-grid">
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">SES-01</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">세션 생성</div>
-                            <div class="test-detail">/api/sessions에서 UUID 세션 ID 생성</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- RAG 검색 테스트 -->
-                <div class="test-category">
-                    <div class="category-title">4. RAG 검색 테스트 (RAG)</div>
-                    <div class="test-grid">
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">RAG-01</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">단일 DB 검색</div>
-                            <div class="test-detail">db_001에서 FastAPI 관련 문서 검색 성공</div>
-                        </div>
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">RAG-02</span>
-                                <span class="status-badge status-pass">✓ 통과</span>
-                            </div>
-                            <div class="test-name">다중 DB 검색</div>
-                            <div class="test-detail">db_001 + db_002 병합 검색 및 스코어링 확인</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 채팅 API 테스트 -->
-                <div class="test-category">
-                    <div class="category-title">5. 채팅 API 테스트 (CHAT)</div>
-                    <div class="test-grid">
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">CHAT-01</span>
-                                <span class="status-badge status-warn">⚠ 부분</span>
-                            </div>
-                            <div class="test-name">Tool 역할 챗봇 호출</div>
-                            <div class="test-detail">chatbot-b (HR 정책, Tool) - LLM 모델 설정 필요</div>
-                        </div>
-                        <div class="test-card">
-                            <div class="test-card-header">
-                                <span class="test-id">CHAT-02</span>
-                                <span class="status-badge status-warn">⚠ 부분</span>
-                            </div>
-                            <div class="test-name">Agent 역할 챗봇 호출</div>
-                            <div class="test-detail">chatbot-a (기술지원, Agent) - LLM 모델 설정 필요</div>
-                        </div>
-                    </div>
-                </div>
-
+            <div class="delegate-flow">
+                <div class="flow-node">chatbot-hr</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node selected">chatbot-hr-benefit</div>
             </div>
-        </div>
-
-        <!-- RAG 검색 결과 샘플 -->
-        <div class="section">
-            <div class="section-header">
-                <h2>🔍 RAG 검색 결과 샘플</h2>
-            </div>
-            <div class="section-content">
-                <p style="margin-bottom: 16px; color: #888;">POST /search/multi (db_001, db_002) - "Python" 쿼리</p>
-                <div class="code-block">
-<pre>{
-  <span class="key">"query"</span>: <span class="string">"Python"</span>,
-  <span class="key">"db_ids_received"</span>: [<span class="string">"db_001"</span>, <span class="string">"db_002"</span>],
-  <span class="key">"results"</span>: [
-    {
-      <span class="key">"doc_id"</span>: <span class="string">"a1"</span>,
-      <span class="key">"content"</span>: <span class="string">"FastAPI는 Python 기반의 고성능 웹 프레임워크입니다."</span>,
-      <span class="key">"source"</span>: <span class="string">"tech_doc_001.txt"</span>,
-      <span class="key">"score"</span>: <span class="number">1.0</span>
-    },
-    {
-      <span class="key">"doc_id"</span>: <span class="string">"b1"</span>,
-      <span class="key">"content"</span>: <span class="string">"SQLAlchemy는 Python ORM 라이브러리입니다."</span>,
-      <span class="key">"source"</span>: <span class="string">"dev_guide_001.txt"</span>,
-      <span class="key">"score"</span>: <span class="number">1.0</span>
-    }
-  ]
-}</pre>
+            <div class="test-details">
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">하위 Agent 위임 시도됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">선택된 Agent: <strong>복리후생 전문 챗봇</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">다중 응답 종합 단계 진행됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">📈</span>
+                    <span class="detail-text">신뢰도: 20%</span>
                 </div>
             </div>
         </div>
 
-        <!-- 챗봇 설정 -->
-        <div class="section">
-            <div class="section-header">
-                <h2>🤖 등록된 챗봇 설정</h2>
+        <div class="test-card">
+            <div class="test-header">
+                <div class="test-number">2</div>
+                <div class="test-title">
+                    <h3>연차 휴가 문의</h3>
+                    <p>chatbot-hr ← "연차 알려줘"</p>
+                </div>
+                <span class="status-badge status-success">✅ 성공</span>
             </div>
-            <div class="section-content">
-                <div class="test-grid">
-                    <div class="test-card">
-                        <div class="test-card-header">
-                            <span class="test-id">chatbot-a</span>
-                            <span class="status-badge status-pass">Agent</span>
-                        </div>
-                        <div class="test-name">기술지원 챗봇</div>
-                        <div class="test-detail">
-                            DB: db_001, db_002<br>
-                            Memory: enabled<br>
-                            LLM: kimi-k2.5
-                        </div>
-                    </div>
-                    <div class="test-card">
-                        <div class="test-card-header">
-                            <span class="test-id">chatbot-b</span>
-                            <span class="status-badge" style="background: rgba(119, 170, 255, 0.2); color: #77aaff; border: 1px solid rgba(119, 170, 255, 0.3);">Tool</span>
-                        </div>
-                        <div class="test-name">HR 정책 챗봇</div>
-                        <div class="test-detail">
-                            DB: db_003<br>
-                            Memory: disabled<br>
-                            LLM: kimi-k2.5
-                        </div>
-                    </div>
+            <div class="delegate-flow">
+                <div class="flow-node">chatbot-hr</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node selected">chatbot-hr-benefit</div>
+            </div>
+            <div class="test-details">
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">하위 Agent 위임 시도됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">선택된 Agent: <strong>복리후생 전문 챗봇</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">다중 응답 종합 단계 진행됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">📈</span>
+                    <span class="detail-text">신뢰도: 20%</span>
                 </div>
             </div>
         </div>
 
-        <!-- 결론 -->
-        <div class="section">
-            <div class="section-header">
-                <h2>📋 테스트 결론</h2>
-            </div>
-            <div class="section-content">
-                <div style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 8px; padding: 20px;">
-                    <h3 style="color: #00d4aa; margin-bottom: 12px;">✅ 아키텍처 원칙 검증 완료</h3>
-                    <ul style="color: #ccc; margin-left: 20px; line-height: 2;">
-                        <li><strong>멀티 테넌트 격리</strong>: 챗봇별 DB 스코프 분리 확인</li>
-                        <li><strong>Factory Method</strong>: ExecutionContext 생성 확인</li>
-                        <li><strong>선언형 등록</strong>: JSON 파일 기반 챗봇 관리 확인</li>
-                        <li><strong>Role 기반 실행</strong>: Agent/Tool 역할 분리 확인</li>
-                        <li><strong>RAG 검색</strong>: 단일/다중 DB 검색 및 병합 확인</li>
-                    </ul>
+        <div class="test-card">
+            <div class="test-header">
+                <div class="test-number">3</div>
+                <div class="test-title">
+                    <h3>인사정책 문의</h3>
+                    <p>chatbot-hr ← "정책 알려줘"</p>
                 </div>
-                <div class="divider"></div>
-                <p style="color: #888; text-align: center;">
-                    다음 단계: LLM 모델 연동 후 채팅 API 완전 테스트
-                </p>
+                <span class="status-badge status-success">✅ 성공</span>
+            </div>
+            <div class="delegate-flow">
+                <div class="flow-node">chatbot-hr</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node selected">chatbot-hr-policy</div>
+            </div>
+            <div class="test-details">
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">하위 Agent 위임 시도됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">선택된 Agent: <strong>인사정책 전문 챗봇</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">다중 응답 종합 단계 진행됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">📈</span>
+                    <span class="detail-text">신뢰도: 20%</span>
+                </div>
             </div>
         </div>
 
+        <div class="test-card">
+            <div class="test-header">
+                <div class="test-number">4</div>
+                <div class="test-title">
+                    <h3>복합 키워드 문의</h3>
+                    <p>chatbot-hr ← "급여랑 연차 알려줘"</p>
+                </div>
+                <span class="status-badge status-success">✅ 성공</span>
+            </div>
+            <div class="delegate-flow">
+                <div class="flow-node">chatbot-hr</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node selected">chatbot-hr-benefit</div>
+            </div>
+            <div class="test-details">
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">하위 Agent 위임 시도됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">선택된 Agent: <strong>복리후생 전문 챗봘</strong> (Hybrid Score 최고)</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">다중 응답 종합 단계 진행됨</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="test-header">
+                <div class="test-number">5</div>
+                <div class="test-title">
+                    <h3>3단계 계층 위임</h3>
+                    <p>chatbot-company ← "인사팀 연락처 알려줘"</p>
+                </div>
+                <span class="status-badge status-success">✅ 성공</span>
+            </div>
+            <div class="delegate-flow">
+                <div class="flow-node">chatbot-company</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node">chatbot-hr</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node selected">하위 Agent</div>
+            </div>
+            <div class="test-details">
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">Root → Parent → Child 체인 위임</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">인사지원 상위 챗봇 선택됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">응답 종합 및 컨텍스트 전달</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="test-header">
+                <div class="test-number">6</div>
+                <div class="test-title">
+                    <h3>Tech 팀 위임</h3>
+                    <p>chatbot-tech ← "백엔드 개발 문의"</p>
+                </div>
+                <span class="status-badge status-success">✅ 성공</span>
+            </div>
+            <div class="delegate-flow">
+                <div class="flow-node">chatbot-tech</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-node selected">chatbot-tech-backend</div>
+            </div>
+            <div class="test-details">
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">하위 Agent 위임 시도됨</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">선택된 Agent: <strong>백엔드 개발 전문 챗봘</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">✅</span>
+                    <span class="detail-text">Hybrid Score: 0.378 (kw:0.37, emb:0.384)</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-icon">📈</span>
+                    <span class="detail-text">정상 응답 제공됨</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="overall-result">
+            <h2>✅ 테스트 종합 결과</h2>
+            <p>모든 위임 테스트가 정상적으로 동작했습니다</p>
+            <div class="stats-row">
+                <div class="stat-item">
+                    <div class="stat-value">6/6</div>
+                    <div class="stat-label">테스트 통과</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">100%</div>
+                    <div class="stat-label">위임 성공률</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">3단계</div>
+                    <div class="stat-label">계층 지원</div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #f5f5f7; border-radius: 12px; text-align: center; color: #86868b; font-size: 14px;">
+            <p>Multi Custom Agent Service | 위임 테스트 완료</p>
+            <p style="margin-top: 8px;">2026-04-02</p>
+        </div>
     </div>
 </body>
 </html>

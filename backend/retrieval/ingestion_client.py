@@ -1,8 +1,13 @@
 from __future__ import annotations
 """
 retrieval/ingestion_client.py - Ingestion 서버 API 클라이언트
-INGESTION_API.md 기준으로 단일 DB / 다중 DB 검색 요청을 처리한다.
-SSL verify=False (사내망 설정)
+새 API 스펙:
+{
+  "query": "string",
+  "index_names": ["string"],
+  "top_k": 5,
+  "threshold": 0
+}
 """
 import requests
 import urllib3
@@ -19,24 +24,41 @@ class IngestionClient:
         self._session = requests.Session()
         self._session.verify = settings.SSL_VERIFY
 
-    def search_single(
+    def search(
         self,
-        db_id: str,
+        db_ids: list[str],
         query: str,
         k: int = 5,
         filter_metadata: dict | None = None,
+        threshold: float = 0.0,
     ) -> list[dict]:
         """
-        POST /databases/{db_id}/search
-        단일 DB 검색
+        POST /search
+        통합 검색 API
+        
+        Args:
+            db_ids: 검색할 인덱스 이름 목록 (구: db_ids)
+            query: 검색 쿼리
+            k: 반환할 결과 수 (구: k → top_k)
+            filter_metadata: 필터 메타데이터 (선택)
+            threshold: 유사도 임계값 (선택, 기본 0)
         """
-        payload: dict = {"query": query, "k": k}
+        if not db_ids:
+            return []
+
+        payload: dict = {
+            "query": query,
+            "index_names": db_ids,  # 변경: db_ids → index_names
+            "top_k": k,  # 변경: k → top_k
+            "threshold": threshold,  # 추가
+        }
+        
         if filter_metadata:
             payload["filter_metadata"] = filter_metadata
 
         try:
             resp = self._session.post(
-                f"{self._base_url}/databases/{db_id}/search",
+                f"{self._base_url}/search",
                 json=payload,
                 timeout=30,
             )
@@ -44,8 +66,27 @@ class IngestionClient:
             data = resp.json()
             return data.get("results", data if isinstance(data, list) else [])
         except Exception as e:
-            print(f"[IngestionClient] search_single 오류 (db_id={db_id}): {e}")
+            print(f"[IngestionClient] search 오류 (index_names={db_ids}): {e}")
             return []
+
+    def search_single(
+        self,
+        db_id: str,
+        query: str,
+        k: int = 5,
+        filter_metadata: dict | None = None,
+        threshold: float = 0.0,
+    ) -> list[dict]:
+        """
+        단일 인덱스 검색 (backward compatibility)
+        """
+        return self.search(
+            db_ids=[db_id],
+            query=query,
+            k=k,
+            filter_metadata=filter_metadata,
+            threshold=threshold,
+        )
 
     def search_multi(
         self,
@@ -53,53 +94,18 @@ class IngestionClient:
         query: str,
         k: int = 5,
         filter_metadata: dict | None = None,
+        threshold: float = 0.0,
     ) -> list[dict]:
         """
-        POST /search/multi
-        다중 DB 검색
-        db_ids가 1개면 단일 검색으로 대체한다.
+        다중 인덱스 검색 (backward compatibility)
         """
-        if not db_ids:
-            return []
-
-        if len(db_ids) == 1:
-            return self.search_single(
-                db_id=db_ids[0],
-                query=query,
-                k=k,
-                filter_metadata=filter_metadata,
-            )
-
-        payload: dict = {"query": query, "k": k, "db_ids": db_ids}
-        if filter_metadata:
-            payload["filter_metadata"] = filter_metadata
-
-        try:
-            resp = self._session.post(
-                f"{self._base_url}/search/multi",
-                json=payload,
-                timeout=30,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("results", data if isinstance(data, list) else [])
-        except Exception as e:
-            print(f"[IngestionClient] search_multi 오류 (db_ids={db_ids}): {e}")
-            return []
-
-    def search(
-        self,
-        db_ids: list[str],
-        query: str,
-        k: int = 5,
-        filter_metadata: dict | None = None,
-    ) -> list[dict]:
-        """
-        챗봇 정의의 db_ids 수에 따라 자동으로 단일/다중 검색을 선택한다.
-        """
-        if len(db_ids) == 1:
-            return self.search_single(db_ids[0], query, k, filter_metadata)
-        return self.search_multi(db_ids, query, k, filter_metadata)
+        return self.search(
+            db_ids=db_ids,
+            query=query,
+            k=k,
+            filter_metadata=filter_metadata,
+            threshold=threshold,
+        )
 
 
 def format_context(results: list[dict]) -> str:
@@ -109,6 +115,12 @@ def format_context(results: list[dict]) -> str:
     lines = []
     for i, r in enumerate(results, 1):
         content = r.get("content", r.get("text", str(r)))
-        source = r.get("source", r.get("doc_id", ""))
-        lines.append(f"[{i}] {content}" + (f"  (출처: {source})" if source else ""))
+        source = r.get("source", r.get("doc_id", r.get("index_name", "")))
+        score = r.get("score", r.get("similarity", None))
+        line = f"[{i}] {content}"
+        if source:
+            line += f" (출처: {source})"
+        if score is not None:
+            line += f" [score: {score:.3f}]"
+        lines.append(line)
     return "\n\n".join(lines)

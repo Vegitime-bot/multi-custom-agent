@@ -105,7 +105,8 @@
       bots.forEach(b => {
         const opt = document.createElement('option');
         opt.value = b.id;
-        opt.textContent = `${b.name} (${b.role})`;
+        const typeLabel = b.sub_chatbots?.length > 0 ? 'Parent' : (b.parent_id ? 'Child' : 'Standalone');
+        opt.textContent = `${b.name} (${typeLabel})`;
         selector.appendChild(opt);
       });
     } catch(e) {
@@ -183,7 +184,7 @@
       }
 
       const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+      const decoder = new TextDecoder('utf-8');
       let buffer = '';
       let fullText = '';
 
@@ -192,14 +193,38 @@
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // 남은 버퍼 처리
+          if (buffer) {
+            const lines = buffer.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const raw = line.slice(6).trim();
+                  if (!raw || raw === '{}') continue;
+                  const chunk = JSON.parse(raw);
+                  if (typeof chunk === 'string') {
+                    fullText += chunk;
+                    assistantDiv.textContent = fullText;
+                  }
+                } catch {}
+              }
+            }
+          }
+          break;
+        }
 
+        // stream: true로 incomplete UTF-8 sequences 처리
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
+        // 마지막 라인은 incomplete일 수 있으므로 버퍼에 유지
         buffer = lines.pop();
 
         for (const line of lines) {
-          if (line.startsWith('event: done')) continue;
+          if (line.startsWith('event: done')) {
+            sendBtn.disabled = false;
+            continue;
+          }
           if (line.startsWith('event: error')) continue;
           if (line.startsWith('event: session_id')) continue;
           if (line.startsWith('data: ')) {
@@ -211,8 +236,6 @@
                 fullText += chunk;
                 assistantDiv.textContent = fullText;
                 chatContainer.scrollTop = chatContainer.scrollHeight;
-              } else if (chunk && typeof chunk === 'object') {
-                // session_id 이벤트의 data
               }
             } catch {}
           }

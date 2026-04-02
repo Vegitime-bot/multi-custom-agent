@@ -15,12 +15,15 @@
     "supported_modes": ["tool", "agent"],
     "default_mode": "agent",
     "max_messages": 20,
-    "delegation_threshold": 70
+    "delegation_threshold": 70,
+    "hybrid_score_threshold": 0.15
   },
   "sub_chatbots": [
     {"id": "chatbot-tech-backend", "level": 1, "default_role": "agent"},
     {"id": "chatbot-tech-frontend", "level": 1, "default_role": "agent"},
     {"id": "chatbot-tech-devops", "level": 1, "default_role": "agent"},
     {"id": "chatbot-rtl-verilog", "level": 1, "default_role": "agent"}
-  ]
+  ],
+  "parent_id": "chatbot-company",
+  "level": 1
 }

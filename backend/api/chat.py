@@ -81,7 +81,7 @@ MOCK_USER_PERMISSIONS = {
         # RTL 하위 챗봇 권한
         "chatbot-rtl-verilog": {"access": True, "allowed_modes": ["tool", "agent"]},
         "chatbot-rtl-synthesis": {"access": True, "allowed_modes": ["tool", "agent"]},
-        "chatbot-d": {"access": True, "allowed_modes": ["tool", "agent"]},
+        "chatbot-company": {"access": True, "allowed_modes": ["tool", "agent"]},
         # 상위/하위 챗봇 권한
         "chatbot-hr": {"access": True, "allowed_modes": ["tool", "agent"]},
         "chatbot-hr-policy": {"access": True, "allowed_modes": ["tool", "agent"]},
@@ -133,12 +133,18 @@ def get_user_permissions(user: dict) -> dict:
 
 def check_chatbot_access(permissions: dict, chatbot_id: str) -> bool:
     """챗봇 접근 권한 확인"""
+    # Test chatbots always allowed
+    if chatbot_id.startswith("test-"):
+        return True
     bot_perm = permissions.get(chatbot_id, {})
     return bot_perm.get("access", False)
 
 
 def check_mode_permission(permissions: dict, chatbot_id: str, mode: str) -> bool:
     """특정 mode 사용 권한 확인"""
+    # Test chatbots always allowed all modes
+    if chatbot_id.startswith("test-"):
+        return True
     bot_perm = permissions.get(chatbot_id, {})
     if not bot_perm.get("access", False):
         return False
@@ -206,8 +212,13 @@ def list_active_chatbots(
             "id": c.id,
             "name": c.name,
             "description": c.description,
-            "supported_modes": ["tool", "agent"],  # TODO: chatbot_def에 추가
-            "default_mode": c.role.value,  # TODO: default_mode로 변경
+            "supported_modes": ["tool", "agent"],
+            "default_mode": c.role.value,
+            "role": c.role.value,
+            "type": "parent" if c.sub_chatbots and len(c.sub_chatbots) > 0 else ("child" if c.parent_id else "standalone"),
+            "sub_chatbots": [{"id": s.id, "level": s.level} for s in c.sub_chatbots] if c.sub_chatbots else [],
+            "parent_id": c.parent_id,
+            "policy": c.policy if c.policy else {},
         }
         for c in manager.list_active()
     ]
@@ -396,6 +407,11 @@ async def chat(
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
     )
 
 

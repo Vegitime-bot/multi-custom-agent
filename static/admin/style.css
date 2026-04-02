@@ -394,11 +394,31 @@ body {
     border-top: 1px solid var(--border);
 }
 
-/* Hierarchy View */
+/* Hierarchy View (3-Tier Enhanced) */
 .hierarchy-container {
     background: var(--bg-secondary);
     border-radius: 16px;
     padding: 24px;
+}
+
+.hierarchy-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.hierarchy-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.hierarchy-trees {
+    margin-bottom: 32px;
+}
+
+.hierarchy-branch {
+    margin-bottom: 4px;
 }
 
 .hierarchy-tree {
@@ -408,10 +428,27 @@ body {
 .hierarchy-node {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    border-radius: 12px;
-    margin-bottom: 8px;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.hierarchy-node:hover {
+    background: #f1f5f9;
+}
+
+/* 3-Tier Node Types */
+.hierarchy-node.root {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border-left: 4px solid #f59e0b;
+}
+
+.hierarchy-node.root:hover {
+    background: linear-gradient(135deg, #fde68a, #fcd34d);
 }
 
 .hierarchy-node.parent {
@@ -419,16 +456,27 @@ body {
     border-left: 4px solid #7c3aed;
 }
 
+.hierarchy-node.parent:hover {
+    background: linear-gradient(135deg, #ddd6fe, #c4b5fd);
+}
+
 .hierarchy-node.child {
     background: #f8fafc;
     border: 1px solid var(--border);
-    margin-left: 32px;
+    border-left: 4px solid #3b82f6;
 }
 
-.hierarchy-node.child::before {
-    content: '└';
-    color: var(--secondary);
-    margin-right: 8px;
+.hierarchy-node.child:hover {
+    background: #f1f5f9;
+}
+
+.hierarchy-node.leaf {
+    background: #f0fdf4;
+    border-left: 4px solid #22c55e;
+}
+
+.hierarchy-node.leaf:hover {
+    background: #dcfce7;
 }
 
 .hierarchy-node.standalone {
@@ -436,8 +484,16 @@ body {
     border: 1px solid var(--border);
 }
 
+.hierarchy-node .expand-icon {
+    font-size: 12px;
+    color: var(--text-secondary);
+    width: 16px;
+    text-align: center;
+    user-select: none;
+}
+
 .hierarchy-node .icon {
-    font-size: 24px;
+    font-size: 20px;
 }
 
 .hierarchy-node .name {
@@ -447,21 +503,32 @@ body {
 
 .hierarchy-node .id {
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
     font-family: monospace;
 }
 
 .hierarchy-node .badge {
     background: rgba(99, 102, 241, 0.1);
     color: var(--primary);
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.hierarchy-node .badge-leaf {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.hierarchy-node .badge-count {
+    background: #dbeafe;
+    color: #2563eb;
 }
 
 .hierarchy-children {
-    margin-left: 24px;
-    padding-left: 24px;
+    margin-left: 8px;
+    padding-left: 16px;
     border-left: 2px dashed var(--border);
 }
 
@@ -488,6 +555,46 @@ body {
 
 .section-title:first-child {
     margin-top: 0;
+}
+
+/* Hierarchy Legend */
+.hierarchy-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin-top: 24px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+}
+
+.legend-color.root {
+    background: #f59e0b;
+}
+
+.legend-color.parent {
+    background: #7c3aed;
+}
+
+.legend-color.child {
+    background: #3b82f6;
+}
+
+.legend-color.leaf {
+    background: #22c55e;
 }
 
 /* User Permissions View */

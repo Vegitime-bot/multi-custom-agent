@@ -173,7 +173,7 @@ function filterChatbots(type) {
     renderChatbots();
 }
 
-// ===== 계층 뷰 =====
+// ===== 계층 뷰 (3-tier 지원) =====
 async function loadHierarchy() {
     const container = document.getElementById('hierarchyContainer');
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -182,57 +182,143 @@ async function loadHierarchy() {
         const response = await fetch('/admin/api/chatbots');
         const bots = await response.json();
         
-        // Build hierarchy
-        const parents = bots.filter(b => b.type === 'parent');
-        const html = parents.map(parent => {
-            const children = bots.filter(b => b.type === 'child' && b.parent === parent.id);
-            const childrenHtml = children.map(child => `
-                <div class="hierarchy-child">
-                    <div class="hierarchy-node child">
-                        <span class="icon">👤</span>
-                        <span class="name">${child.name}</span>
-                        <span class="id">${child.id}</span>
-                    </div>
-                </div>
-            `).join('');
-            
-            return `
-                <div class="hierarchy-tree">
-                    <div class="hierarchy-node parent">
-                        <span class="icon">🤖</span>
-                        <span class="name">${parent.name}</span>
-                        <span class="id">${parent.id}</span>
-                        <span class="badge">하위 ${children.length}개</span>
-                    </div>
-                    <div class="hierarchy-children">
-                        ${childrenHtml || '<div class="hierarchy-empty">하위 Agent 없음</div>'}
-                    </div>
-                </div>
-            `;
-        }).join('');
+        // Build 3-tier hierarchy tree
+        // Level 0: Root nodes (no parent)
+        const roots = bots.filter(b => !b.parent_id || b.level === 0);
         
-        // Add standalone section
-        const standalone = bots.filter(b => b.type === 'standalone');
+        const html = roots.map(root => renderHierarchyTree(root, bots, 0)).join('');
+        
+        // Add standalone section (not part of hierarchy)
+        const standalone = bots.filter(b => b.level === undefined || (b.level === 0 && !b.parent_id && !roots.includes(b)));
         const standaloneHtml = standalone.map(s => `
-            <div class="hierarchy-node standalone">
+            <div class="hierarchy-node standalone" data-level="0">
                 <span class="icon">💬</span>
                 <span class="name">${s.name}</span>
                 <span class="id">${s.id}</span>
+                <span class="badge">단독</span>
             </div>
         `).join('');
         
         container.innerHTML = `
-            <h3 class="section-title">🌳 Agent 계층 구조</h3>
-            ${html || '<div class="empty-state">상위 Agent가 없습니다</div>'}
+            <div class="hierarchy-header">
+                <h3 class="section-title">🌳 3-Tier Agent 계층 구조</h3>
+                <div class="hierarchy-controls">
+                    <button class="btn btn-sm btn-secondary" onclick="expandAllNodes()">전체 펼치기</button>
+                    <button class="btn btn-sm btn-secondary" onclick="collapseAllNodes()">전체 접기</button>
+                </div>
+            </div>
+            <div class="hierarchy-trees">
+                ${html || '<div class="empty-state">Root Agent가 없습니다</div>'}
+            </div>
             
             <h3 class="section-title">💬 단독 챗봘</h3>
             <div class="hierarchy-standalone-list">
                 ${standaloneHtml || '<div class="hierarchy-empty">단독 챗봘 없음</div>'}
             </div>
+            
+            <div class="hierarchy-legend">
+                <span class="legend-item"><span class="legend-color root"></span> Root (Level 0)</span>
+                <span class="legend-item"><span class="legend-color parent"></span> Parent (Level 1)</span>
+                <span class="legend-item"><span class="legend-color child"></span> Child (Level 2+)</span>
+                <span class="legend-item"><span class="legend-color leaf"></span> Leaf (하위 없음)</span>
+            </div>
         `;
+        
+        // Initialize expand/collapse state
+        initHierarchyInteractions();
     } catch (error) {
         container.innerHTML = `<div class="error">로드 실패: ${error.message}</div>`;
     }
+}
+
+function renderHierarchyTree(node, allBots, depth = 0) {
+    // Get children using level/parent_id
+    const children = allBots.filter(b => b.parent_id === node.id);
+    const isLeaf = children.length === 0;
+    
+    // Determine node type based on level
+    let nodeClass = 'child';
+    let icon = '👤';
+    if (node.level === 0) {
+        nodeClass = 'root';
+        icon = '🏢';
+    } else if (node.level === 1) {
+        nodeClass = 'parent';
+        icon = '🤖';
+    }
+    
+    if (isLeaf) {
+        nodeClass += ' leaf';
+        icon = '👤';
+    }
+    
+    const hasChildren = children.length > 0;
+    const expandIcon = hasChildren ? '<span class="expand-icon">▼</span>' : '';
+    
+    // Recursively render children
+    const childrenHtml = hasChildren ? `
+        <div class="hierarchy-children" data-depth="${depth + 1}">
+            ${children.map(child => renderHierarchyTree(child, allBots, depth + 1)).join('')}
+        </div>
+    ` : '';
+    
+    return `
+        <div class="hierarchy-branch" data-level="${node.level || 0}" data-id="${node.id}">
+            <div class="hierarchy-node ${nodeClass}" onclick="toggleNode('${node.id}')" style="padding-left: ${depth * 24}px;">
+                ${expandIcon}
+                <span class="icon">${icon}</span>
+                <span class="name">${node.name}</span>
+                <span class="id">${node.id}</span>
+                <span class="badge">Lv.${node.level !== undefined ? node.level : '?'}</span>
+                ${isLeaf ? '<span class="badge badge-leaf">Leaf</span>' : `<span class="badge badge-count">하위 ${children.length}개</span>`}
+            </div>
+            ${childrenHtml}
+        </div>
+    `;
+}
+
+function initHierarchyInteractions() {
+    // All nodes expanded by default
+    document.querySelectorAll('.hierarchy-children').forEach(el => {
+        el.style.display = 'block';
+    });
+}
+
+function toggleNode(nodeId) {
+    const branch = document.querySelector(`.hierarchy-branch[data-id="${nodeId}"]`);
+    if (!branch) return;
+    
+    const children = branch.querySelector(':scope > .hierarchy-children');
+    const expandIcon = branch.querySelector(':scope > .hierarchy-node > .expand-icon');
+    
+    if (children) {
+        const isVisible = children.style.display !== 'none';
+        children.style.display = isVisible ? 'none' : 'block';
+        if (expandIcon) {
+            expandIcon.textContent = isVisible ? '▶' : '▼';
+        }
+    }
+}
+
+function expandAllNodes() {
+    document.querySelectorAll('.hierarchy-children').forEach(el => {
+        el.style.display = 'block';
+    });
+    document.querySelectorAll('.expand-icon').forEach(el => {
+        el.textContent = '▼';
+    });
+}
+
+function collapseAllNodes() {
+    // Keep only root level visible
+    document.querySelectorAll('.hierarchy-children').forEach(el => {
+        if (parseInt(el.dataset.depth) > 0) {
+            el.style.display = 'none';
+        }
+    });
+    document.querySelectorAll('.expand-icon').forEach(el => {
+        el.textContent = '▶';
+    });
 }
 
 // ===== 사용자 권한 뷰 =====
