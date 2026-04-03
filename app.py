@@ -10,7 +10,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
 from backend.api.admin import router as admin_router
@@ -68,14 +67,6 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── 세션 미들웨어 (SSO 인증용) ────────────────────────────────
-    # TODO: 사내 환경에서 SECRET_KEY 변경 필요 (32바이트 이상)
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key=settings.SECRET_KEY if hasattr(settings, "SECRET_KEY") else "change-this-in-production-secret-key-32bytes",
-        max_age=3600,  # 세션 유효시간 1시간
-    )
-
     # ── CORS 미들웨어 ──────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
@@ -86,15 +77,22 @@ def create_app() -> FastAPI:
     )
 
     # ── SSO 인증 (Mock Auth 아닐 때만) ────────────────────────────
-    # 재import: 환경변수 변경 시점 반영
-    from config import settings as current_settings
-    if not current_settings.USE_MOCK_AUTH:
+    # 사내 템플릿: SSO 라우터를 루트에 등록 (/, /sso, /acs, /slo)
+    if not settings.USE_MOCK_AUTH:
         try:
             from backend.api.sso import router as sso_router
-            app.include_router(sso_router)
-            print("[Startup] SSO 인증 라우터 등록됨 (/auth/*)")
+            app.include_router(sso_router, prefix="")  # 루트에 등록
+            print("[Startup] SSO 인증 라우터 등록됨 (/, /sso, /acs, /slo)")
         except Exception as e:
             print(f"[Startup] SSO 라우터 로드 실패: {e}")
+    else:
+        # Mock Auth: 챗봇 UI를 루트에 표시
+        @app.get("/", response_class=HTMLResponse)
+        def index():
+            html_file = STATIC_DIR / "index.html"
+            if html_file.exists():
+                return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
+            return HTMLResponse(content="<h1>Multi Custom Agent Service</h1><p>static/index.html 없음</p>")
 
     # ── 라우터 등록 ───────────────────────────────────────────────
     app.include_router(health_router)
@@ -102,14 +100,6 @@ def create_app() -> FastAPI:
     app.include_router(admin_router, prefix="")
     app.include_router(permissions_router)
     app.include_router(conversations_router)
-
-    # ── 루트: HTML 챗 UI ────────────────────────────────────────────
-    @app.get("/", response_class=HTMLResponse)
-    def index():
-        html_file = STATIC_DIR / "index.html"
-        if html_file.exists():
-            return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
-        return HTMLResponse(content="<h1>Multi Custom Agent Service</h1><p>static/index.html 없음</p>")
 
     # ── 정적 파일 마운트 ───────────────────────────────────────────
     if STATIC_DIR.exists():
