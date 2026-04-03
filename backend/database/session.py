@@ -51,14 +51,14 @@ def init_tables():
     """
     개발 환경에서 테이블 자동 생성 (운영에서는 마이그레이션 권장)
     """
-    from sqlalchemy import inspect
+    from sqlalchemy import inspect, text
     from backend.permissions.repository import Base
     
     inspector = inspect(engine)
     
     # 스키마 존재 확인 및 생성
     with engine.connect() as conn:
-        conn.execute("CREATE SCHEMA IF NOT EXISTS test")
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS test"))
         conn.commit()
     
     # 테이블 생성
