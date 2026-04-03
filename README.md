@@ -33,17 +33,21 @@ python mock_ingestion_server.py
 
 ### 4. 메인 서버 실행
 
-**방법 1: uvicorn 직접 실행 (권장)**
+**방법 1: app.py 직접 실행 (권장)**
 
 ```bash
 # 터미널 2: 메인 서버 (포트 8080)
-uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
+python app.py
 ```
 
-**방법 2: main.py 직접 실행**
+**방법 2: uvicorn으로 실행 (FastAPI 표준)**
 
 ```bash
-python backend/main.py
+# app.py 기준 (신규 구조)
+uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+
+# 또는 기존 방식 (하위호환)
+uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 > **중요:** Ingestion 서버가 먼저 켜져 있어야 챗봇이 문서 검색 및 답변 생성 가능

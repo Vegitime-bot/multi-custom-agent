@@ -1,86 +1,38 @@
+"""
+backend/main.py - Thin Wrapper (legacy support)
+
+새로운 진입점: app.py (루트)
+사용 예:
+  - 신규: python app.py
+  - 기존: uvicorn backend.main:app
+
+이 파일은 하위호환을 위해 유지됩니다.
+"""
 from __future__ import annotations
-"""
-main.py - FastAPI 앱 진입점
-앱 초기화, 상태 객체 등록, 라우터 등록, 정적 파일 서빙을 수행한다.
-"""
+
+# 루트 app.py에서 앱 가져오기
+import sys
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-from backend.api.admin import router as admin_router
-from backend.api.chat import router as chat_router
-from backend.api.health import router as health_router
-from backend.api.permissions import router as permissions_router
-from backend.api.conversations import router as conversations_router
-from backend.config import settings
-from backend.managers.chatbot_manager import ChatbotManager
-from backend.managers.memory_manager import MemoryManager
-from backend.managers.session_manager import SessionManager
-from backend.retrieval.ingestion_client import IngestionClient
-from backend.roles.router import RoleRouter
+from app import create_app, settings
 
-# ── 정적 파일 경로 ─────────────────────────────────────────────────
-STATIC_DIR = Path(__file__).parent.parent / "static"
-
-# ── 앱 생성 ───────────────────────────────────────────────────────
-app = FastAPI(
-    title="Multi Custom Agent Service",
-    description="멀티 테넌트 RAG 챗봇 플랫폼",
-    version="1.0.0",
-)
-
-# ── CORS ──────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# FastAPI 앱 인스턴스 (기존 코드와 호환)
+app = create_app()
 
 
-# ── 앱 시작 시 상태 객체 초기화 ───────────────────────────────────
-@app.on_event("startup")
-def startup():
-    app.state.chatbot_manager = ChatbotManager()
-    app.state.session_manager = SessionManager()
-    app.state.memory_manager  = MemoryManager()
-    app.state.ingestion_client = IngestionClient()
-    app.state.role_router     = RoleRouter(app.state.ingestion_client)
-    print(f"[Startup] USE_MOCK_DB={settings.USE_MOCK_DB}, USE_MOCK_AUTH={settings.USE_MOCK_AUTH}")
-    print(f"[Startup] 챗봇 {len(app.state.chatbot_manager.list_all())}개 로드됨")
-
-
-# ── 라우터 등록 ───────────────────────────────────────────────────
-app.include_router(health_router)
-app.include_router(chat_router)
-app.include_router(admin_router, prefix="")
-app.include_router(permissions_router)
-app.include_router(conversations_router)
-
-
-# ── 루트: HTML 챗 UI 서빙 ─────────────────────────────────────────
-@app.get("/", response_class=HTMLResponse)
-def index():
-    html_file = STATIC_DIR / "index.html"
-    if html_file.exists():
-        return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
-    return HTMLResponse(content="<h1>Multi Custom Agent Service</h1><p>static/index.html 없음</p>")
-
-
-# ── 정적 파일 마운트 ──────────────────────────────────────────────
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
-
-# ── 직접 실행 ─────────────────────────────────────────────────────
+# 직접 실행 시 (python backend/main.py)
 if __name__ == "__main__":
     import uvicorn
+    
+    print(f"[Legacy] Starting via backend/main.py")
+    print(f"[Hint] Consider using 'python app.py' instead")
+    
     uvicorn.run(
-        "backend.main:app",
+        app,
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,

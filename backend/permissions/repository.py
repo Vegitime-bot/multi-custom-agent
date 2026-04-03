@@ -260,10 +260,43 @@ class PGPermissionRepository(PermissionRepository):
 
 
 # ── 팩토리 함수 ────────────────────────────────────────────────────
-def get_permission_repository(use_mock: bool = True, session: Optional[Session] = None) -> PermissionRepository:
-    """설정에 따라 적절한 Repository 반환"""
+def get_permission_repository(
+    use_mock: bool = True,
+    session: Optional[Session] = None
+) -> PermissionRepository:
+    """
+    설정에 따라 적절한 Repository 반환
+    """
     if use_mock:
         return MockPermissionRepository()
+    # 실제 DB 사용 시 session 필수
     if session is None:
-        raise ValueError("PGPermissionRepository requires a SQLAlchemy Session")
+        from backend.database.session import SessionLocal
+        db = SessionLocal()
+        try:
+            return PGPermissionRepository(db)
+        except:
+            db.close()
+            raise
     return PGPermissionRepository(session)
+
+
+# ── FastAPI 의존성 주입용 ─────────────────────────────────────────
+from backend.config import settings
+from backend.database.session import get_db_session
+from fastapi import Depends
+
+
+def get_perm_repo(db: Session = Depends(get_db_session)) -> PermissionRepository:
+    """
+    FastAPI Depends용 PermissionRepository 제공자
+    
+    사용 예:
+        @router.get("/users/{knox_id}")
+        async def get_user(
+            knox_id: str,
+            repo: PermissionRepository = Depends(get_perm_repo),
+        ):
+            ...
+    """
+    return get_permission_repository(use_mock=settings.USE_MOCK_DB, session=db)

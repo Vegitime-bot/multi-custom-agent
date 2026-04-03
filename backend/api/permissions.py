@@ -9,11 +9,9 @@ from fastapi import APIRouter, HTTPException, Depends, Query, status
 from pydantic import BaseModel
 
 from backend.auth.mock_auth import get_current_user
-from backend.config import settings
 from backend.permissions.repository import (
-    get_permission_repository,
     PermissionRepository,
-    MockPermissionRepository,
+    get_perm_repo,
 )
 from backend.managers.chatbot_manager import ChatbotManager
 from backend.api.deps import get_chatbot_manager
@@ -52,12 +50,6 @@ class ChatbotUsersResponse(BaseModel):
     chatbot_id: str
     users: List[dict]
     total: int
-
-
-# ── 의존성 주입 ───────────────────────────────────────────────────
-def get_perm_repo() -> PermissionRepository:
-    """설정에 따라 Mock 또는 PG Repository 반환"""
-    return get_permission_repository(use_mock=settings.USE_MOCK_DB)
 
 
 # ── API 엔드포인트 ────────────────────────────────────────────────
