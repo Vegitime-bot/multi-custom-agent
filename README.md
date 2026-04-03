@@ -83,11 +83,32 @@ multi-custom-agent/
 
 ## 설정
 
-`backend/config.py` 또는 환경변수로 설정:
+`config.py` 또는 `.env` 파일로 설정:
 
+### 기본 설정
 - `PORT` - 서버 포트 (기본: 8080)
 - `HOST` - 서버 호스트 (기본: 0.0.0.0)
-- `USE_MOCK_DB=true` - Mock DB 사용
-- `USE_MOCK_AUTH=true` - Mock 인증 사용
+- `USE_MOCK_DB=true` - Mock DB 사용 (PostgreSQL 연결 시 false)
+- `USE_MOCK_AUTH=true` - Mock 인증 사용 (SSO 연동 시 false)
 - `LLM_BASE_URL` - LLM API 엔드포인트
 - `INGESTION_BASE_URL` - 문서 검색 서버
+
+### SSO 연동 (사내 환경)
+
+`.env` 파일에 아래 설정 추가:
+
+```bash
+# Mock Auth 비활성화
+USE_MOCK_AUTH=false
+
+# 사내 SSO 정보 (OIDC/OAuth2)
+SSO_ISSUER=https://sso.company.com
+SSO_CLIENT_ID=your-client-id
+SSO_CLIENT_SECRET=your-client-secret
+SSO_REDIRECT_URI=http://localhost:8080/auth/acs
+
+# 세션 보안 키 (32바이트 이상)
+SECRET_KEY=$(openssl rand -base64 32)
+```
+
+SSO 연동 상세 가이드: [docs/SSO_INTEGRATION.md](docs/SSO_INTEGRATION.md)
