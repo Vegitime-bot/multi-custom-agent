@@ -2,10 +2,11 @@
 backend/api/sso.py - OIDC/OAuth2 SSO 인증 (사내 템플릿 구조)
 
 사내 SSO 템플릿:
-- GET /         : 로그인 폼 (index.html)
 - GET /sso      : SSO 인증 요청
 - GET /acs      : SSO 콜백 (복호화)
 - GET /slo      : 로그아웃
+
+참고: 루트 경로 (/)는 app.py에서 관리
 
 TODO: 사내 SSO Provider에 맞게 구현 필요
 """
@@ -38,22 +39,7 @@ class SSOModel:
     # state: str = Form(...)
 
 
-# ── 1. 로그인 폼 (GET /)
-@router.get("/", response_class=HTMLResponse)
-async def get_login_form(request: Request):
-    """
-    로그인 폼 페이지
-    사내 템플릿: return templates.TemplateResponse('index.html', context={...})
-    """
-    context = {
-        "request": request,
-        "claim_val": "",  # TODO: 사내 claim 값 설정
-        # TODO: 사내 추가 context 변수
-    }
-    return templates.TemplateResponse("index.html", context=context)
-
-
-# ── 2. SSO 인증 요청 (GET /sso)
+# ── SSO 인증 요청 (GET /sso)
 @router.get("/sso")
 async def sso(request: Request):
     """
@@ -94,32 +80,28 @@ async def acs_get(
     # TODO: 사내 SSO 응답 처리
     
     if error:
-        return templates.TemplateResponse(
-            "index.html",
-            {
-                "request": request,
-                "claim_val": f"Error: {error}",
-            }
-        )
+        # 에러 발생 시 로그인 페이지로 리다이렉트 (쿼리 파라미터 유지)
+        error_url = "/?error=" + error
+        chatbot = request.query_params.get("chatbot")
+        if chatbot:
+            error_url += f"&chatbot={chatbot}"
+        return RedirectResponse(url=error_url)
     
     if not code:
-        return templates.TemplateResponse(
-            "index.html",
-            {
-                "request": request,
-                "claim_val": "Error: Authorization code missing",
-            }
-        )
+        return RedirectResponse(url="/?error=no_code")
     
     # TODO: state 검증 (CSRF 방지)
     # TODO: code로 token 교환
     # TODO: 사용자 정보 복호화
-    # TODO: 세션 또는 JWT 저장
+    # TODO: JWT 쿠키 설정 또는 세션 생성
     
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="ACS not implemented yet. TODO: 사내 SSO 콜백 로직 추가"
-    )
+    # 인증 성공: 원래 요청했던 chatbot으로 리다이렉트
+    redirect_url = "/"
+    chatbot = request.query_params.get("chatbot")
+    if chatbot:
+        redirect_url = f"/?chatbot={chatbot}"
+    
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 
 # ── 4. SSO 콜백 (POST /acs) - Form 데이터용
