@@ -21,6 +21,10 @@ from pydantic import BaseModel
 from backend.auth.mock_auth import get_current_user
 from backend.config import settings
 from backend.core.models import ExecutionRole
+from backend.permissions.repository import (
+    PermissionRepository,
+    get_permission_repository,
+)
 from backend.debug_logger import logger
 from backend.executors import ToolExecutor, AgentExecutor, ParentAgentExecutor
 from backend.managers.chatbot_manager import ChatbotManager
@@ -123,9 +127,31 @@ MOCK_USER_PERMISSIONS = {
 
 
 def get_user_permissions(user: dict) -> dict:
-    """사용자의 챗봇별 권한 조회"""
-    # 임시: 모든 사용자에게 user-001 권한 부여 (SSO knox_id 관계없이)
-    # TODO: 실제 DB 연결 시 수정
+    """사용자의 챗봇별 권한 조회 (DB 연동)"""
+    knox_id = user.get("knox_id", "unknown")
+    
+    # PermissionRepository로 실제 DB 조회
+    try:
+        repo = get_permission_repository(use_mock=settings.USE_MOCK_DB)
+        perms = repo.get_user_permissions(knox_id)
+        
+        # {chatbot_id: {"access": bool, "allowed_modes": [...]}} 형태로 변환
+        result = {}
+        for p in perms:
+            chatbot_id = p.get("chatbot_id")
+            can_access = p.get("can_access", False)
+            if chatbot_id:
+                result[chatbot_id] = {
+                    "access": can_access,
+                    "allowed_modes": ["tool", "agent"]  # DB에 모드 정보 없으면 기본값
+                }
+        
+        if result:
+            return result
+    except Exception as e:
+        logger.warning(f"[get_user_permissions] DB 조회 실패: {e}")
+    
+    # DB 조회 실패 또는 권한 없으면 Mock 데이터 사용 (임시)
     return MOCK_USER_PERMISSIONS.get("user-001", {})
 
 
