@@ -37,19 +37,29 @@ def get_current_user(request: Request) -> dict:
             if session_sso:
                 knox_id = session_knox or 'sso_user'
                 print(f"[AUTH DEBUG] 세션 인증 성공 - knox_id: {knox_id}")
-                repo = get_user_repository(use_mock=settings.USE_MOCK_DB)
-                user = repo.get_user_by_knox_id(knox_id)
-                if user:
-                    print(f"[AUTH DEBUG] DB에서 사용자 찾음: {user.get('name', 'unknown')}")
-                    return user
-                else:
-                    print(f"[AUTH DEBUG] DB에 사용자 없음, 임시 생성")
-                    # 임시 사용자 반환
-                    return {
-                        "knox_id": knox_id,
-                        "name": request.session.get('user_info', {}).get('name', 'SSO User'),
-                        "team": "AI팀",
-                    }
+                
+                # DB 연결하여 사용자 조회
+                try:
+                    repo = get_user_repository(
+                        use_mock=settings.USE_MOCK_DB,
+                        database_url=settings.DATABASE_URL
+                    )
+                    user = repo.get_user_by_knox_id(knox_id)
+                    if user:
+                        print(f"[AUTH DEBUG] DB에서 사용자 찾음: {user.get('name', 'unknown')}")
+                        return user
+                    else:
+                        print(f"[AUTH DEBUG] DB에 사용자 없음, 임시 생성")
+                except Exception as db_err:
+                    print(f"[AUTH ERROR] DB 연결 오류: {db_err}")
+                    print(f"[AUTH DEBUG] 임시 사용자 반환")
+                
+                # 임시 사용자 반환
+                return {
+                    "knox_id": knox_id,
+                    "name": request.session.get('user_info', {}).get('name', 'SSO User'),
+                    "team": "AI팀",
+                }
     except Exception as e:
         print(f"[AUTH DEBUG] 세션 확인 중 오류: {e}")
 
@@ -64,11 +74,24 @@ def get_current_user(request: Request) -> dict:
             detail="인증 정보가 없습니다.",
         )
 
-    repo = get_user_repository(use_mock=settings.USE_MOCK_DB)
-    user = repo.get_user_by_knox_id(knox_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"사용자를 찾을 수 없습니다: {knox_id}",
+    # DB 연결하여 사용자 조회
+    try:
+        repo = get_user_repository(
+            use_mock=settings.USE_MOCK_DB,
+            database_url=settings.DATABASE_URL
         )
-    return user
+        user = repo.get_user_by_knox_id(knox_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"사용자를 찾을 수 없습니다: {knox_id}",
+            )
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[AUTH ERROR] DB 조회 오류: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="사용자 조회 중 오류가 발생했습니다.",
+        )
