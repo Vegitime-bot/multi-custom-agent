@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
 from backend.api.admin import router as admin_router
@@ -67,6 +68,14 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # ── Session 미들웨어 (SSO 인증용) ─────────────────────────────
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.SECRET_KEY or "your-secret-key-change-in-production",
+        session_cookie="session",
+        max_age=3600,  # 1시간
+    )
+    
     # ── CORS 미들웨어 ──────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
