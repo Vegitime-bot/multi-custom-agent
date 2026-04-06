@@ -127,49 +127,74 @@ def create_app() -> FastAPI:
         ):
             """
             SSO POST 콜백 처리 (IdP에서 form_post로 호출)
-            id_token: JWT 토큰
             """
+            # 🔍 디버깅: IdP에서 받은 form 데이터 로깅
+            print(f"[SSO DEBUG] POST / 호출됨")
+            print(f"[SSO DEBUG] id_token: {'있음' if id_token else '없음'}")
+            print(f"[SSO DEBUG] code: {'있음' if code else '없음'}")
+            print(f"[SSO DEBUG] state: {state}")
+            print(f"[SSO DEBUG] query_params: {dict(request.query_params)}")
+
             if id_token:
                 try:
-                    # JWT payload 추출 (header.payload.signature에서 payload)
+                    # JWT payload 추출
                     parts = id_token.split('.')
+                    print(f"[SSO DEBUG] JWT parts 수: {len(parts)}")
+
                     if len(parts) >= 2:
                         payload_b64 = parts[1]
-                        # base64 패딩 보정
                         payload_b64 += '=' * (4 - len(payload_b64) % 4)
                         payload_json = base64.urlsafe_b64decode(payload_b64)
                         payload = json.loads(payload_json)
 
-                        # knox_id 추출 (IdP 필드명 확인 필요)
-                        knox_id = payload.get('sub') or payload.get('knox_id') or payload.get('username')
+                        print(f"[SSO DEBUG] JWT payload: {payload}")
 
-                        # 세션에 저장
-                        request.session['sso'] = True
-                        request.session['knox_id'] = knox_id
-                        request.session['user_info'] = {
-                            'name': payload.get('name', ''),
-                            'email': payload.get('email', ''),
-                        }
-                        print(f"[SSO] 인증 성공 - knox_id: {knox_id}")
+                        # knox_id 추출 (다양한 필드명 시도)
+                        knox_id = (
+                            payload.get('sub') or
+                            payload.get('knox_id') or
+                            payload.get('username') or
+                            payload.get('email') or
+                            payload.get('preferred_username') or
+                            payload.get('user_id') or
+                            payload.get('upn') or
+                            payload.get('name')
+                        )
 
-                        # 원래 요청한 chatbot 파라미터 유지
-                        chatbot = request.query_params.get('chatbot')
-                        if chatbot:
-                            return RedirectResponse(url=f"/?chatbot={chatbot}", status_code=302)
-                        return RedirectResponse(url="/", status_code=302)
+                        print(f"[SSO DEBUG] 추출된 knox_id: {knox_id}")
+
+                        if knox_id:
+                            # 세션에 저장
+                            request.session['sso'] = True
+                            request.session['knox_id'] = knox_id
+                            request.session['user_info'] = {
+                                'name': payload.get('name', ''),
+                                'email': payload.get('email', ''),
+                            }
+                            print(f"[SSO] ✅ 인증 성공 - knox_id: {knox_id}")
+
+                            chatbot = request.query_params.get('chatbot')
+                            if chatbot:
+                                return RedirectResponse(url=f"/?chatbot={chatbot}", status_code=302)
+                            return RedirectResponse(url="/", status_code=302)
+                        else:
+                            print(f"[SSO ERROR] knox_id를 찾을 수 없음. payload 키: {list(payload.keys())}")
 
                 except Exception as e:
-                    print(f"[SSO] 토큰 파싱 실패: {e}")
+                    print(f"[SSO ERROR] 토큰 파싱 실패: {e}")
+                    import traceback
+                    traceback.print_exc()
                     return RedirectResponse(url="/?error=sso_token_error", status_code=302)
 
-            # 토큰 없이 code만 있는 경우
+            # code만 있는 경우
             if code:
-                # TODO: code로 id_token 교환 (백엔드 채널)
                 print(f"[SSO] code 수신: {code[:20]}...")
+                # TODO: code로 id_token 교환
                 request.session['sso'] = True
+                request.session['knox_id'] = 'unknown'  # code 교환 후 실제 ID로 교체 필요
                 return RedirectResponse(url="/", status_code=302)
 
-            # 토큰도 코드도 없음
+            print(f"[SSO ERROR] id_token도 code도 없음")
             return RedirectResponse(url="/?error=sso_no_token", status_code=302)
     else:
         # Mock Auth: 챗봇 UI를 루트에 표시

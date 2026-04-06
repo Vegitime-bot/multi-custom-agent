@@ -13,30 +13,50 @@ from backend.users.repository import get_user_repository
 def get_current_user(request: Request) -> dict:
     """
     현재 요청의 사용자를 반환한다.
-    - USE_MOCK_AUTH=true: 고정 사용자(jyd1234) 반환
-    - USE_MOCK_AUTH=false: 
-        1. 세션에 sso 정보가 있으면 세션에서 사용자 정보 읽기
-        2. 없으면 X-Knox-Id 헤더 기반 DB 조회
     """
+    # 🔍 디버깅: 요청 정보 로깅
+    print(f"[AUTH DEBUG] get_current_user 호출됨")
+    print(f"[AUTH DEBUG] USE_MOCK_AUTH: {settings.USE_MOCK_AUTH}")
+    
     if settings.USE_MOCK_AUTH:
+        print(f"[AUTH DEBUG] Mock 모드 - jyd1234 반환")
         return {"knox_id": "jyd1234", "name": "장영동", "team": "AI팀", "eng_name": "Youngdong Jang"}
 
-    # ── 세션 기반 SSO 인증 (사내 SSO) ─────────────────────────────
-    # SSO 인증 후 세션에 'sso'와 'knox_id' 저장됨
+    # ── 세션 기반 SSO 인증 ─────────────────────────────────────
     try:
-        if hasattr(request, 'session') and request.session.get('sso'):
-            knox_id = request.session.get('knox_id')
-            if knox_id:
+        has_session = hasattr(request, 'session')
+        print(f"[AUTH DEBUG] session 있음: {has_session}")
+        
+        if has_session:
+            session_sso = request.session.get('sso')
+            session_knox = request.session.get('knox_id')
+            print(f"[AUTH DEBUG] session['sso']: {session_sso}")
+            print(f"[AUTH DEBUG] session['knox_id']: {session_knox}")
+            
+            if session_sso and session_knox:
+                print(f"[AUTH DEBUG] 세션 인증 성공 - knox_id: {session_knox}")
                 repo = get_user_repository(use_mock=settings.USE_MOCK_DB)
-                user = repo.get_user_by_knox_id(knox_id)
+                user = repo.get_user_by_knox_id(session_knox)
                 if user:
+                    print(f"[AUTH DEBUG] DB에서 사용자 찾음: {user.get('name', 'unknown')}")
                     return user
-    except Exception:
-        pass  # 세션 미들웨어 없으면 다음으로 진행
+                else:
+                    print(f"[AUTH DEBUG] DB에 사용자 없음, 임시 생성")
+                    # DB에 없으면 세션 기반 임시 사용자 반환
+                    return {
+                        "knox_id": session_knox,
+                        "name": request.session.get('user_info', {}).get('name', 'Unknown'),
+                        "team": "AI팀",
+                    }
+    except Exception as e:
+        print(f"[AUTH DEBUG] 세션 확인 중 오류: {e}")
 
-    # ── 헤더 기반 인증 (fallback) ─────────────────────────────────
+    # ── 헤더 기반 인증 ───────────────────────────────────────────
     knox_id = request.headers.get("X-Knox-Id")
+    print(f"[AUTH DEBUG] X-Knox-Id 헤더: {knox_id}")
+    
     if not knox_id:
+        print(f"[AUTH DEBUG] ❌ 인증 실패 - 세션도 헤더도 없음")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="인증 정보가 없습니다.",
