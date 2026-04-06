@@ -14,14 +14,27 @@ def get_current_user(request: Request) -> dict:
     """
     현재 요청의 사용자를 반환한다.
     - USE_MOCK_AUTH=true: 고정 사용자(jyd1234) 반환
-    - USE_MOCK_AUTH=false: Authorization 헤더의 knox_id 기반 DB 조회 (SSO TBD)
+    - USE_MOCK_AUTH=false: 
+        1. 세션에 sso 정보가 있으면 세션에서 사용자 정보 읽기
+        2. 없으면 X-Knox-Id 헤더 기반 DB 조회
     """
     if settings.USE_MOCK_AUTH:
         return {"knox_id": "jyd1234", "name": "장영동", "team": "AI팀", "eng_name": "Youngdong Jang"}
 
-    # ── 실제 SSO 연동 (TBD) ─────────────────────────────────────
-    # 사내 OAuth SSO 방식 확인 후 구현 예정
-    # 현재는 Authorization 헤더에서 knox_id를 직접 읽는 임시 방식 사용
+    # ── 세션 기반 SSO 인증 (사내 SSO) ─────────────────────────────
+    # SSO 인증 후 세션에 'sso'와 'knox_id' 저장됨
+    try:
+        if hasattr(request, 'session') and request.session.get('sso'):
+            knox_id = request.session.get('knox_id')
+            if knox_id:
+                repo = get_user_repository(use_mock=settings.USE_MOCK_DB)
+                user = repo.get_user_by_knox_id(knox_id)
+                if user:
+                    return user
+    except Exception:
+        pass  # 세션 미들웨어 없으면 다음으로 진행
+
+    # ── 헤더 기반 인증 (fallback) ─────────────────────────────────
     knox_id = request.headers.get("X-Knox-Id")
     if not knox_id:
         raise HTTPException(
