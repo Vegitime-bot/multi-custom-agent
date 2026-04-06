@@ -33,19 +33,21 @@ def get_current_user(request: Request) -> dict:
             print(f"[AUTH DEBUG] session['sso']: {session_sso}")
             print(f"[AUTH DEBUG] session['knox_id']: {session_knox}")
             
-            if session_sso and session_knox:
-                print(f"[AUTH DEBUG] 세션 인증 성공 - knox_id: {session_knox}")
+            # knox_id가 없어도 sso=True면 인증된 것으로 처리
+            if session_sso:
+                knox_id = session_knox or 'sso_user'
+                print(f"[AUTH DEBUG] 세션 인증 성공 - knox_id: {knox_id}")
                 repo = get_user_repository(use_mock=settings.USE_MOCK_DB)
-                user = repo.get_user_by_knox_id(session_knox)
+                user = repo.get_user_by_knox_id(knox_id)
                 if user:
                     print(f"[AUTH DEBUG] DB에서 사용자 찾음: {user.get('name', 'unknown')}")
                     return user
                 else:
                     print(f"[AUTH DEBUG] DB에 사용자 없음, 임시 생성")
-                    # DB에 없으면 세션 기반 임시 사용자 반환
+                    # 임시 사용자 반환
                     return {
-                        "knox_id": session_knox,
-                        "name": request.session.get('user_info', {}).get('name', 'Unknown'),
+                        "knox_id": knox_id,
+                        "name": request.session.get('user_info', {}).get('name', 'SSO User'),
                         "team": "AI팀",
                     }
     except Exception as e:
