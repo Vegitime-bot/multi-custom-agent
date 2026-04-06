@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -78,15 +77,6 @@ def create_app() -> FastAPI:
         max_age=3600,  # 1시간
         same_site="lax",  # SSO 리다이렉트용 lax 설정
         https_only=False,  # 개발 환경용 (프로덕션에서는 True)
-    )
-    
-    # ── CORS 미들웨어 ──────────────────────────────────────────────
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
     )
 
     # ── SSO 인증 (Mock Auth 아닐 때만) ────────────────────────────
