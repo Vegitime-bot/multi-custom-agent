@@ -86,43 +86,25 @@ def create_app() -> FastAPI:
             print(f"[Startup] SSO 라우터 로드 실패: {e}")
             
         # SSO 인증 상태 체크 후 챗봇 UI 제공
-        # 사내: 이미 SSO 인증된 경우 챗봇 UI 표시, 아니면 SSO로 리다이렉트
         @app.get("/", response_class=HTMLResponse)
         async def root_with_sso_check(request: Request):
             """
             루트 경로: SSO 인증 상태에 따라 챗봇 UI 또는 SSO 로그인으로 분기
-            쿼리 파라미터(chatbot) 유지
             """
-            # TODO: 사내 SSO 인증 상태 체크 방식에 맞게 수정
-            # 예: JWT 쿠키 확인, 세션 확인 등
-            is_authenticated = False
-            
-            # 방법 1: 쿠키에서 JWT 확인
-            # jwt_token = request.cookies.get("access_token")
-            # if jwt_token:
-            #     is_authenticated = verify_jwt(jwt_token)
-            
-            # 방법 2: 세션 확인 (SessionMiddleware 사용 시)
-            # if hasattr(request, "session") and "sso" in request.session:
-            #     is_authenticated = True
-            
-            if is_authenticated:
-                # 인증됨: 챗봇 UI 표시
+            if not settings.USE_MOCK_AUTH:
+                try:
+                    if 'sso' in request.session:
+                        html_file = STATIC_DIR / "index.html"
+                        if html_file.exists():
+                            return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
+                    return RedirectResponse(url="/sso")
+                except Exception:
+                    return RedirectResponse(url="/sso")
+            else:
                 html_file = STATIC_DIR / "index.html"
                 if html_file.exists():
                     return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
                 return HTMLResponse(content="<h1>Multi Custom Agent Service</h1><p>static/index.html 없음</p>")
-            else:
-                # 미인증: SSO 로그인으로 리다이렉트 (쿼리 파라미터 유지)
-                # TODO: 사내 SSO 로그인 URL로 변경
-                sso_url = "/sso"
-                
-                # 쿼리 파라미터가 있으면 유지
-                if request.query_params:
-                    from urllib.parse import urlencode
-                    sso_url = f"{sso_url}?{urlencode(request.query_params)}"
-                
-                return RedirectResponse(url=sso_url)
     else:
         # Mock Auth: 챗봇 UI를 루트에 표시
         @app.get("/", response_class=HTMLResponse)
