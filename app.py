@@ -76,6 +76,8 @@ def create_app() -> FastAPI:
         secret_key=settings.SECRET_KEY or "your-secret-key-change-in-production",
         session_cookie="session",
         max_age=3600,  # 1시간
+        same_site="lax",  # SSO 리다이렉트용 lax 설정
+        https_only=False,  # 개발 환경용 (프로덕션에서는 True)
     )
     
     # ── CORS 미들웨어 ──────────────────────────────────────────────
@@ -102,14 +104,29 @@ def create_app() -> FastAPI:
             """
             루트 경로: SSO 인증 상태에 따라 챗봇 UI 또는 SSO 로그인으로 분기
             """
+            # 🔍 디버깅: GET / 요청 확인
+            print(f"[GET / DEBUG] 요청 받음 - query: {dict(request.query_params)}")
+            print(f"[GET / DEBUG] cookies: {request.cookies.get('session', '없음')[:20] if 'session' in request.cookies else '없음'}")
+            
             if not settings.USE_MOCK_AUTH:
                 try:
-                    if 'sso' in request.session:
+                    has_session = hasattr(request, 'session')
+                    sso_value = request.session.get('sso') if has_session else 'N/A'
+                    knox_id = request.session.get('knox_id') if has_session else 'N/A'
+                    print(f"[GET / DEBUG] session 존재: {has_session}")
+                    print(f"[GET / DEBUG] session['sso']: {sso_value}")
+                    print(f"[GET / DEBUG] session['knox_id']: {knox_id}")
+                    
+                    if sso_value:
+                        print(f"[GET / DEBUG] ✅ SSO 인증됨 - HTML 반환")
                         html_file = STATIC_DIR / "index.html"
                         if html_file.exists():
                             return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
+                    else:
+                        print(f"[GET / DEBUG] ❌ SSO 미인증 - /sso로 리다이렉트")
                     return RedirectResponse(url="/sso")
-                except Exception:
+                except Exception as e:
+                    print(f"[GET / DEBUG] 예외 발생: {e}")
                     return RedirectResponse(url="/sso")
             else:
                 html_file = STATIC_DIR / "index.html"
@@ -120,26 +137,34 @@ def create_app() -> FastAPI:
         # SSO POST 콜백 처리 (사내 SSO용)
         @app.post("/")
         async def root_sso_callback(
-                request: Request,
-                id_token: str = Form(default=None),
-                code: str = Form(default=None),
-                state: str = Form(default=None),
+            request: Request,
+            id_token: str = Form(default=None),
+            code: str = Form(default=None),
+            state: str = Form(default=None),
+            error: str = Form(default=None),
         ):
             """
             SSO POST 콜백 처리 (IdP에서 form_post로 호출)
             """
-            # 🔍 디버깅: IdP에서 받은 form 데이터 로깅
-            print(f"[SSO DEBUG] POST / 호출됨")
-            print(f"[SSO DEBUG] id_token: {'있음' if id_token else '없음'}")
-            print(f"[SSO DEBUG] code: {'있음' if code else '없음'}")
-            print(f"[SSO DEBUG] state: {state}")
-            print(f"[SSO DEBUG] query_params: {dict(request.query_params)}")
+            print(f"\n{'='*60}")
+            print(f"[SSO POST /] ⭐ IdP로부터 POST 콜백 받음!")
+            print(f"[SSO POST /] id_token: {'✅ 있음' if id_token else '❌ 없음'}")
+            print(f"[SSO POST /] code: {'✅ 있음' if code else '❌ 없음'}")
+            print(f"[SSO POST /] state: {state}")
+            print(f"[SSO POST /] error: {error}")
+            
+            # 세션 쿠키 확인
+            session_cookie = request.cookies.get('session')
+            print(f"[SSO POST /] session 쿠키: {'✅ 있음' if session_cookie else '❌ 없음'}")
+
+            if error:
+                print(f"[SSO ERROR] IdP 에러: {error}")
+                return RedirectResponse(url=f"/?error={error}")
 
             if id_token:
                 try:
-                    # JWT payload 추출
                     parts = id_token.split('.')
-                    print(f"[SSO DEBUG] JWT parts 수: {len(parts)}")
+                    print(f"[SSO] JWT parts 수: {len(parts)}")
 
                     if len(parts) >= 2:
                         payload_b64 = parts[1]
@@ -147,9 +172,9 @@ def create_app() -> FastAPI:
                         payload_json = base64.urlsafe_b64decode(payload_b64)
                         payload = json.loads(payload_json)
 
-                        print(f"[SSO DEBUG] JWT payload: {payload}")
+                        print(f"[SSO] JWT payload: {json.dumps(payload, indent=2, ensure_ascii=False)[:500]}")
 
-                        # knox_id 추출 (다양한 필드명 시도)
+                        # knox_id 추출
                         knox_id = (
                             payload.get('sub') or
                             payload.get('knox_id') or
@@ -161,7 +186,7 @@ def create_app() -> FastAPI:
                             payload.get('name')
                         )
 
-                        print(f"[SSO DEBUG] 추출된 knox_id: {knox_id}")
+                        print(f"[SSO] 추출된 knox_id: {knox_id}")
 
                         if knox_id:
                             # 세션에 저장
@@ -171,30 +196,25 @@ def create_app() -> FastAPI:
                                 'name': payload.get('name', ''),
                                 'email': payload.get('email', ''),
                             }
-                            print(f"[SSO] ✅ 인증 성공 - knox_id: {knox_id}")
+                            print(f"[SSO] ✅ 세션 저장 완료")
 
                             chatbot = request.query_params.get('chatbot')
-                            if chatbot:
-                                return RedirectResponse(url=f"/?chatbot={chatbot}", status_code=302)
-                            return RedirectResponse(url="/", status_code=302)
-                        else:
-                            print(f"[SSO ERROR] knox_id를 찾을 수 없음. payload 키: {list(payload.keys())}")
+                            redirect_url = f"/?chatbot={chatbot}" if chatbot else "/"
+                            print(f"[SSO] 리다이렉트: {redirect_url}")
+                            return RedirectResponse(url=redirect_url, status_code=302)
 
                 except Exception as e:
                     print(f"[SSO ERROR] 토큰 파싱 실패: {e}")
-                    import traceback
-                    traceback.print_exc()
                     return RedirectResponse(url="/?error=sso_token_error", status_code=302)
 
-            # code만 있는 경우
+            # code만 있는 경우  
             if code:
                 print(f"[SSO] code 수신: {code[:20]}...")
-                # TODO: code로 id_token 교환
                 request.session['sso'] = True
-                request.session['knox_id'] = 'unknown'  # code 교환 후 실제 ID로 교체 필요
+                request.session['knox_id'] = 'code_only_user'
                 return RedirectResponse(url="/", status_code=302)
 
-            print(f"[SSO ERROR] id_token도 code도 없음")
+            print(f"[SSO ERROR] 토큰 없음")
             return RedirectResponse(url="/?error=sso_no_token", status_code=302)
     else:
         # Mock Auth: 챗봇 UI를 루트에 표시
