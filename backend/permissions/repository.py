@@ -28,7 +28,6 @@ class UserChatbotAccess(Base):
     chatbot_id = Column(String(50), nullable=True)
     can_access = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_dict(self) -> dict:
         return {
@@ -37,7 +36,6 @@ class UserChatbotAccess(Base):
             "chatbot_id": self.chatbot_id,
             "can_access": self.can_access,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 
@@ -149,7 +147,6 @@ class MockPermissionRepository(PermissionRepository):
                 "chatbot_id": chatbot_id,
                 "can_access": can_access,
                 "created_at": now.isoformat(),
-                "updated_at": now.isoformat(),
             }
 
     def get_user_permissions(self, knox_id: str) -> List[dict]:
@@ -170,7 +167,6 @@ class MockPermissionRepository(PermissionRepository):
 
         if key in self._permissions:
             self._permissions[key]["can_access"] = can_access
-            self._permissions[key]["updated_at"] = now.isoformat()
         else:
             new_id = max(p["id"] for p in self._permissions.values()) + 1 if self._permissions else 1
             self._permissions[key] = {
@@ -179,7 +175,6 @@ class MockPermissionRepository(PermissionRepository):
                 "chatbot_id": chatbot_id,
                 "can_access": can_access,
                 "created_at": now.isoformat(),
-                "updated_at": now.isoformat(),
             }
         return True
 
@@ -227,7 +222,6 @@ class PGPermissionRepository(PermissionRepository):
 
         if existing:
             existing.can_access = can_access
-            existing.updated_at = datetime.utcnow()
         else:
             new_perm = UserChatbotAccess(
                 knox_id=knox_id,
