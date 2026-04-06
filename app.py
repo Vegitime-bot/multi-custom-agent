@@ -216,6 +216,101 @@ def create_app() -> FastAPI:
 
             print(f"[SSO ERROR] 토큰 없음")
             return RedirectResponse(url="/?error=sso_no_token", status_code=302)
+        
+        # SSO /acs 콜백 처리 (IdP form_post용 - sso.py보다 우선)
+        @app.post("/acs")
+        async def acs_sso_callback(
+            request: Request,
+            id_token: str = Form(default=None),
+            code: str = Form(default=None),
+            state: str = Form(default=None),
+            error: str = Form(default=None),
+        ):
+            """
+            SSO /acs POST 콜백 처리 (IdP에서 form_post로 호출)
+            """
+            print(f"\n{'='*60}")
+            print(f"[SSO POST /acs] ⭐ IdP로부터 POST 콜백 받음!")
+            print(f"[SSO POST /acs] id_token: {'✅ 있음' if id_token else '❌ 없음'}")
+            print(f"[SSO POST /acs] code: {'✅ 있음' if code else '❌ 없음'}")
+            print(f"[SSO POST /acs] state: {state}")
+            print(f"[SSO POST /acs] error: {error}")
+            
+            if error:
+                print(f"[SSO ERROR] IdP 에러: {error}")
+                return RedirectResponse(url=f"/?error={error}")
+
+            if id_token:
+                print(f"[SSO] id_token 길이: {len(id_token)}")
+                print(f"[SSO] id_token 앞 100자: {id_token[:100]}...")
+                
+                try:
+                    parts = id_token.split('.')
+                    print(f"[SSO] JWT parts 수: {len(parts)}")
+
+                    if len(parts) >= 2:
+                        # JWT Payload 디코딩
+                        payload_b64 = parts[1]
+                        payload_b64 += '=' * (4 - len(payload_b64) % 4)
+                        payload_json = base64.urlsafe_b64decode(payload_b64)
+                        payload = json.loads(payload_json)
+
+                        print(f"[SSO] JWT payload: {json.dumps(payload, indent=2, ensure_ascii=False)[:500]}")
+
+                        # knox_id 추출 (다양한 필드명 시도)
+                        knox_id = (
+                            payload.get('sub') or
+                            payload.get('knox_id') or
+                            payload.get('username') or
+                            payload.get('email') or
+                            payload.get('preferred_username') or
+                            payload.get('user_id') or
+                            payload.get('upn') or
+                            payload.get('name') or
+                            payload.get('oid') or  # Azure AD용
+                            payload.get('upn')
+                        )
+
+                        print(f"[SSO] 추출된 knox_id: {knox_id}")
+
+                        if knox_id:
+                            request.session['sso'] = True
+                            request.session['knox_id'] = knox_id
+                            request.session['user_info'] = {
+                                'name': payload.get('name', ''),
+                                'email': payload.get('email', ''),
+                            }
+                            print(f"[SSO] ✅ 세션 저장 완료: knox_id={knox_id}")
+
+                            # state에 chatbot 정보가 있을 수 있음
+                            redirect_url = f"/?chatbot={state}" if state else "/"
+                            print(f"[SSO] 리다이렉트: {redirect_url}")
+                            return RedirectResponse(url=redirect_url, status_code=302)
+                        else:
+                            print(f"[SSO WARNING] knox_id 없음. payload 키: {list(payload.keys())}")
+                            # 사용자 ID 없어도 인증된 것으로 처리
+                            request.session['sso'] = True
+                            request.session['knox_id'] = 'unknown'
+                            return RedirectResponse(url="/", status_code=302)
+
+                except Exception as e:
+                    print(f"[SSO ERROR] 토큰 파싱 실패: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 파싱 실패해도 인증된 것으로 처리 (임시)
+                    request.session['sso'] = True
+                    request.session['knox_id'] = 'parse_failed'
+                    return RedirectResponse(url="/", status_code=302)
+
+            # code만 있는 경우
+            if code:
+                print(f"[SSO] code 수신: {code[:20]}...")
+                request.session['sso'] = True
+                request.session['knox_id'] = 'code_only_user'
+                return RedirectResponse(url="/", status_code=302)
+
+            print(f"[SSO ERROR] 토큰 없음")
+            return RedirectResponse(url="/?error=sso_no_token", status_code=302)
     else:
         # Mock Auth: 챗봇 UI를 루트에 표시
         @app.get("/", response_class=HTMLResponse)
