@@ -124,11 +124,9 @@ MOCK_USER_PERMISSIONS = {
 
 def get_user_permissions(user: dict) -> dict:
     """사용자의 챗봇별 권한 조회"""
-    user_id = user.get("knox_id", "unknown")
-    # Mock: 모든 사용자에게 user-001 권한 부여 (실제 환경에서 DB 조회)
-    if settings.USE_MOCK_AUTH:
-        return MOCK_USER_PERMISSIONS.get("user-001", {})
-    return MOCK_USER_PERMISSIONS.get(user_id, {})
+    # 임시: 모든 사용자에게 user-001 권한 부여 (SSO knox_id 관계없이)
+    # TODO: 실제 DB 연결 시 수정
+    return MOCK_USER_PERMISSIONS.get("user-001", {})
 
 
 def check_chatbot_access(permissions: dict, chatbot_id: str) -> bool:
