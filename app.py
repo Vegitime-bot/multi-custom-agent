@@ -105,6 +105,17 @@ def create_app() -> FastAPI:
                 if html_file.exists():
                     return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
                 return HTMLResponse(content="<h1>Multi Custom Agent Service</h1><p>static/index.html 없음</p>")
+        
+        # SSO POST 콜백 처리 (사내 SSO용)
+        @app.post("/")
+        async def root_sso_callback(request: Request):
+            """
+            SSO POST 콜백 처리
+            사내 SSO는 인증 후 POST로 콜백할 수 있음
+            """
+            # SSO 인증 성공으로 간주하고 세션 설정
+            request.session['sso'] = True
+            return RedirectResponse(url="/", status_code=302)
     else:
         # Mock Auth: 챗봇 UI를 루트에 표시
         @app.get("/", response_class=HTMLResponse)
