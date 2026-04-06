@@ -98,21 +98,17 @@ def create_app() -> FastAPI:
         except Exception as e:
             print(f"[Startup] SSO 라우터 로드 실패: {e}")
             
-        # SSO 인증 상태 체크 후 챗봇 UI 제공
-        @app.get("/", response_class=HTMLResponse)
+        # 루트 경로: 인증되면 /admin으로, 미인증이면 /sso로
+        @app.get("/")
         async def root_with_sso_check(request: Request):
             """
             루트 경로: SSO 인증 상태에 따라 분기
-            - 인증됨: 챗봇 UI 반환
-            - 미인증: /sso로 리다이렉트 (사내 SSO 처리)
+            - 인증됨: /admin으로 리다이렉트 (관리자 페이지)
+            - 미인증: /sso로 리다이렉트 (SSO 로그인)
             """
             try:
-                # 세션 확인 - sso.py에서 설정한 세션
                 if request.session.get('sso'):
-                    html_file = STATIC_DIR / "index.html"
-                    if html_file.exists():
-                        return HTMLResponse(content=html_file.read_text(encoding="utf-8"))
-                # 미인증 시 SSO 로그인으로 리다이렉트
+                    return RedirectResponse(url="/admin")
                 return RedirectResponse(url="/sso")
             except Exception:
                 return RedirectResponse(url="/sso")

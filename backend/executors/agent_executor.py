@@ -62,7 +62,7 @@ class AgentExecutor(BaseExecutor):
         if confidence < 20 or (is_policy_question and confidence < 50):
             fallback_msg = (
                 "죄송합니다. 해당 내용은 제 전문 분야가 아닙니다. "
-                "인사정책 전문 챗봘에게 문의해 주세요."
+                "인사정책 전문 챗봇에게 문의해 주세요."
             )
             yield fallback_msg
             # 메모리에도 저장
