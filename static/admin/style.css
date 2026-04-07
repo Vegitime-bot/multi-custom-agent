@@ -818,12 +818,93 @@ body {
     animation: modalSlide 0.3s ease;
 }
 
+.modal-content.wide {
+    max-width: 900px;
+}
+
 .modal-content.large {
     max-width: 640px;
 }
 
 .modal-content.small {
     max-width: 400px;
+}
+
+/* 2-Column Form with Guide */
+.form-with-guide {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    min-height: 0;
+}
+
+.guide-panel {
+    background: #f8fafc;
+    border-left: 1px solid var(--border);
+    padding: 24px;
+    overflow-y: auto;
+    border-radius: 0 0 16px 0;
+}
+
+.guide-panel h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: var(--text-primary);
+}
+
+.guide-section {
+    margin-bottom: 20px;
+}
+
+.guide-section h5 {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.guide-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.guide-section ul li {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 3px 0 3px 16px;
+    position: relative;
+}
+
+.guide-section ul li::before {
+    content: "•";
+    position: absolute;
+    left: 4px;
+    color: var(--primary);
+}
+
+.guide-tip {
+    background: #e0e7ff;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--primary-dark);
+    margin-top: 8px;
+    line-height: 1.6;
+}
+
+.guide-link {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.guide-link:hover {
+    text-decoration: underline;
 }
 
 @keyframes modalSlide {
@@ -1168,5 +1249,17 @@ body {
     
     .search-box input {
         width: 100%;
+    }
+
+    .modal-content.wide {
+        max-width: 100%;
+    }
+
+    .form-with-guide {
+        grid-template-columns: 1fr;
+    }
+
+    .guide-panel {
+        display: none;
     }
 }

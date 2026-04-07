@@ -160,57 +160,102 @@
 
     <!-- Create/Edit Modal -->
     <div class="modal" id="chatbotModal">
-        <div class="modal-content">
+        <div class="modal-content wide">
             <div class="modal-header">
-                <h3 id="modalTitle">새 챗봘 만들기</h3>
+                <h3 id="modalTitle">새 챗봇 만들기</h3>
                 <button class="close-btn" onclick="closeModal()">&times;</button>
             </div>
-            <form id="chatbotForm" class="modal-body" onsubmit="saveChatbot(event)">
-                <div class="form-group">
-                    <label>챗봘 ID *</label>
-                    <input type="text" id="chatbotId" placeholder="예: chatbot-custom-001" required>
-                    <small>영문, 숫자, 하이픈만 사용 가능</small>
-                </div>
-                <div class="form-group">
-                    <label>챗봘 이름 *</label>
-                    <input type="text" id="chatbotName" placeholder="예: 커스텀 챗봘" required>
-                </div>
-                <div class="form-group">
-                    <label>설명</label>
-                    <textarea id="chatbotDesc" rows="2" placeholder="챗봘의 역할과 기능을 설명해주세요"></textarea>
-                </div>
-                <div class="form-row">
+            <div class="form-with-guide">
+                <form id="chatbotForm" class="modal-body" onsubmit="saveChatbot(event)">
                     <div class="form-group">
-                        <label>챗봘 유형</label>
-                        <select id="chatbotType" onchange="onTypeChange()">
-                            <option value="standalone">단독 챗봘</option>
-                            <option value="parent">상위 Agent</option>
-                            <option value="child">하위 Agent</option>
-                        </select>
+                        <label>챗봇 ID *</label>
+                        <input type="text" id="chatbotId" placeholder="예: chatbot-custom-001" required>
+                        <small>영문, 숫자, 하이픈만 사용 가능</small>
                     </div>
-                    <div class="form-group" id="parentSelectGroup" style="display: none;">
-                        <label>상위 Agent 선택</label>
-                        <select id="parentAgent">
-                            <option value="">선택하세요</option>
-                        </select>
+                    <div class="form-group">
+                        <label>챗봇 이름 *</label>
+                        <input type="text" id="chatbotName" placeholder="예: 커스텀 챗봇" required>
                     </div>
-                </div>
-                <div class="form-group">
-                    <label>시스템 프롬프트</label>
-                    <textarea id="systemPrompt" rows="4" placeholder="챗봘의 역할을 정의하는 프롬프트를 입력하세요"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>연결된 DB</label>
-                    <div class="db-selector" id="dbSelector">
-                        <input type="text" id="dbInput" placeholder="DB ID 입력 (쉼표로 구분)" class="db-input">
-                        <div class="db-tags" id="dbTags"></div>
+                    <div class="form-group">
+                        <label>설명</label>
+                        <textarea id="chatbotDesc" rows="2" placeholder="챗봇의 역할과 기능을 설명해주세요"></textarea>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>챗봇 유형</label>
+                            <select id="chatbotType" onchange="onTypeChange()">
+                                <option value="standalone">단독 챗봇</option>
+                                <option value="parent">상위 Agent</option>
+                                <option value="child">하위 Agent</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="parentSelectGroup" style="display: none;">
+                            <label>상위 Agent 선택</label>
+                            <select id="parentAgent">
+                                <option value="">선택하세요</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>시스템 프롬프트</label>
+                        <textarea id="systemPrompt" rows="4" placeholder="챗봇의 역할을 정의하는 프롬프트를 입력하세요"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>연결된 DB</label>
+                        <div class="db-selector" id="dbSelector">
+                            <input type="text" id="dbInput" placeholder="DB ID 입력 (쉼표로 구분)" class="db-input">
+                            <div class="db-tags" id="dbTags"></div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal()">취소</button>
+                        <button type="submit" class="btn btn-primary">저장</button>
+                    </div>
+                </form>
+                <div class="guide-panel">
+                    <h4>📝 챗봇 작성 가이드</h4>
+
+                    <div class="guide-section">
+                        <h5>Description 작성 팁</h5>
+                        <ul>
+                            <li>핵심 키워드를 명확하게 나열하세요</li>
+                            <li>전문 분야와 담당 업무를 명시하세요</li>
+                            <li>위임 정확도에 직접 영향을 줍니다</li>
+                        </ul>
+                        <div class="guide-tip">
+                            ✅ 좋은 예: "IT 보안, 접근권한, VPN 설정 지원"<br>
+                            ❌ 나쁜 예: "IT 관련 챗봇"
+                        </div>
+                    </div>
+
+                    <div class="guide-section">
+                        <h5>System Prompt 작성 팁</h5>
+                        <ul>
+                            <li><strong>Leaf Agent</strong>: 구체적인 역할과 응답 방식 정의</li>
+                            <li><strong>Parent Agent</strong>: 하위 에이전트 위임 기준 명시</li>
+                            <li>명확한 경계와 제한사항을 포함하세요</li>
+                            <li>응답 언어 및 형식을 지정하세요</li>
+                        </ul>
+                    </div>
+
+                    <div class="guide-section">
+                        <h5>계층 구조 (3-Tier)</h5>
+                        <ul>
+                            <li>🏢 <strong>Root</strong>: 최상위 라우터</li>
+                            <li>📂 <strong>Parent</strong>: 도메인 그룹 관리자</li>
+                            <li>🤖 <strong>Leaf</strong>: 전문 업무 처리자</li>
+                        </ul>
+                        <div class="guide-tip">
+                            Root → HR Parent → 채용 Leaf<br>
+                            Root → IT Parent → 보안 Leaf
+                        </div>
+                    </div>
+
+                    <a href="/docs/CHATBOT_CREATION_GUIDE.md" class="guide-link" target="_blank">
+                        📄 자세한 가이드 보기 (docs/CHATBOT_CREATION_GUIDE.md) →
+                    </a>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">취소</button>
-                    <button type="submit" class="btn btn-primary">저장</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 
