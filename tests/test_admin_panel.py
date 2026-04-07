@@ -197,7 +197,8 @@ class TestAdminPanel:
         # 상위 Agent에 하위 추가되었는지 확인
         bots = requests.get(f"{BASE_URL}/admin/api/chatbots").json()
         hr_bot = [b for b in bots if b["id"] == "chatbot-hr"][0]
-        assert child_id in hr_bot["sub_chatbots"]
+        sub_ids = [s['id'] if isinstance(s, dict) else s for s in hr_bot["sub_chatbots"]]
+        assert child_id in sub_ids
         
         # 정리
         requests.delete(f"{BASE_URL}/admin/api/chatbots/{child_id}")

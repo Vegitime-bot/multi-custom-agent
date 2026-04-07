@@ -37,6 +37,21 @@
       "id": "chatbot-hr-benefit",
       "level": 1,
       "default_role": "agent"
+    },
+    {
+      "id": "test-child-e74803b7",
+      "level": 1,
+      "default_role": "agent"
+    },
+    {
+      "id": "test-remove-9162446d",
+      "level": 1,
+      "default_role": "agent"
+    },
+    {
+      "id": "hierarchy-test-7e03ab01",
+      "level": 1,
+      "default_role": "agent"
     }
   ],
   "parent_id": "chatbot-company",

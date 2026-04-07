@@ -120,8 +120,9 @@ class TestWebPages:
         
         # chatbot-hr의 하위 챗봘 확인
         hr_bot = [b for b in bots if b['id'] == 'chatbot-hr'][0]
-        assert 'chatbot-hr-policy' in hr_bot['sub_chatbots']
-        assert 'chatbot-hr-benefit' in hr_bot['sub_chatbots']
+        sub_ids = [s['id'] if isinstance(s, dict) else s for s in hr_bot['sub_chatbots']]
+        assert 'chatbot-hr-policy' in sub_ids
+        assert 'chatbot-hr-benefit' in sub_ids
         
         # chatbot-hr-policy의 상위가 chatbot-hr인지 확인
         hr_policy = [b for b in bots if b['id'] == 'chatbot-hr-policy'][0]
@@ -187,7 +188,8 @@ class TestWebPages:
         # chatbot-hr에 하위 챗봘이 추가되었는지 확인
         bots = requests.get(f"{BASE_URL}/admin/api/chatbots").json()
         hr_bot = [b for b in bots if b['id'] == 'chatbot-hr'][0]
-        assert test_id in hr_bot['sub_chatbots']
+        sub_ids = [s['id'] if isinstance(s, dict) else s for s in hr_bot['sub_chatbots']]
+        assert test_id in sub_ids
         
         # 정리
         requests.delete(f"{BASE_URL}/admin/api/chatbots/{test_id}")
@@ -238,15 +240,17 @@ class TestWebPages:
         # 삭제 전 상위 Agent 확인
         bots = requests.get(f"{BASE_URL}/admin/api/chatbots").json()
         hr_bot = [b for b in bots if b['id'] == 'chatbot-hr'][0]
-        assert test_id in hr_bot['sub_chatbots']
-        
+        sub_ids = [s['id'] if isinstance(s, dict) else s for s in hr_bot['sub_chatbots']]
+        assert test_id in sub_ids
+
         # 삭제
         requests.delete(f"{BASE_URL}/admin/api/chatbots/{test_id}")
-        
+
         # 상위 Agent에서 제거되었는지 확인
         bots = requests.get(f"{BASE_URL}/admin/api/chatbots").json()
         hr_bot = [b for b in bots if b['id'] == 'chatbot-hr'][0]
-        assert test_id not in hr_bot['sub_chatbots']
+        sub_ids = [s['id'] if isinstance(s, dict) else s for s in hr_bot['sub_chatbots']]
+        assert test_id not in sub_ids
 
 
 if __name__ == "__main__":

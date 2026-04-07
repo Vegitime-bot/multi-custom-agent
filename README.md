@@ -1,8 +1,28 @@
 # Multi Custom Agent Service
 
-멀티 테넌트 RAG 챗봇 플랫폼입니다.
+멀티 테넌트 RAG 챗봇 플랫폼입니다. 여러 독립적인 챗봇을 하나의 서버에서 운영하며, 계층적 위임(Hierarchical Delegation)과 SSE 스트리밍을 지원합니다.
 
-## 서버 실행 방법
+## 문서
+
+| 문서 | 내용 |
+|------|------|
+| [01. 프로젝트 개요](docs/01_PROJECT_OVERVIEW.md) | 목적, 주요 기능, 사용자 흐름, 기술 스택 |
+| [02. 아키텍처](docs/02_ARCHITECTURE.md) | 시스템 구성, 컴포넌트 다이어그램, 데이터 흐름 |
+| [03. API 명세](docs/03_API_SPECIFICATION.md) | 전체 API 엔드포인트, 요청/응답 스키마, 에러 코드 |
+| [04. 데이터 모델](docs/04_DATA_MODEL.md) | DB 스키마, JSON 구조, 도메인 모델 관계도 |
+| [05. 설정 & 배포](docs/05_CONFIGURATION.md) | 환경변수, .env 예시, 배포 가이드 |
+| [06. 테스트](docs/06_TESTING.md) | 테스트 전략, 실행 방법, 수동 테스트 |
+| [07. 변경 이력](docs/07_CHANGELOG.md) | Git 커밋 기반 기능 추가/변경/삭제 내역 |
+| [08. 문제 해결](docs/08_TROUBLESHOOTING.md) | Known Issues, 디버깅 가이드, FAQ |
+
+기타 참고 문서:
+- [SSO 연동 가이드](docs/SSO_INTEGRATION.md)
+- [Ingestion API 명세](INGESTION_API.md)
+- [환경변수 상세](ENV.md)
+
+---
+
+## 빠른 시작
 
 ### 1. 환경 설정
 
@@ -11,104 +31,83 @@ cd multi-custom-agent
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### 2. 환경변수 설정 (선택)
-
-```bash
-# 기본 포트: 8080
-export PORT=8080
-
-# 또는 .env 파일 생성
 cp .env.example .env
-# .env 파일 수정
 ```
 
-### 3. Mock Ingestion 서버 실행 (RAG 검색용)
+### 2. Mock Ingestion 서버 실행 (터미널 1)
 
 ```bash
-# 터미널 1: Ingestion 서버 (포트 8001)
 python mock_ingestion_server.py
+# → http://localhost:8001
 ```
 
-### 4. 메인 서버 실행
-
-**방법 1: app.py 직접 실행 (권장)**
+### 3. 메인 서버 실행 (터미널 2)
 
 ```bash
-# 터미널 2: 메인 서버 (포트 8080)
 python app.py
+# → http://localhost:8080
 ```
 
-**방법 2: uvicorn으로 실행 (FastAPI 표준)**
+> Ingestion 서버가 먼저 실행되어 있어야 합니다.
 
-```bash
-# app.py 기준 (신규 구조)
-uvicorn app:app --host 0.0.0.0 --port 8080 --reload
+### 4. 접속
 
-# 또는 기존 방식 (하위호환)
-uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
-```
+| URL | 설명 |
+|-----|------|
+| `http://localhost:8080` | 챗봇 UI |
+| `http://localhost:8080/admin` | 관리자 패널 |
+| `http://localhost:8080/docs` | API 문서 (Swagger) |
+| `http://localhost:8080/health` | 헬스체크 |
 
-> **중요:** Ingestion 서버가 먼저 켜져 있어야 챗봇이 문서 검색 및 답변 생성 가능
+---
 
-### 5. 접속
+## 주요 API
 
-- 챗봇 UI: `http://localhost:8080`
-- API 문서: `http://localhost:8080/docs`
-- API: `http://localhost:8080/api/chatbots`
+| 엔드포인트 | 메서드 | 설명 |
+|-----------|--------|------|
+| `/api/chat` | POST | 챗봇 대화 (SSE 스트리밍) |
+| `/api/sessions` | POST | 세션 생성 |
+| `/api/sessions/{id}/history` | GET | 대화 기록 |
+| `/admin/api/chatbots` | GET/POST | 챗봇 목록/생성 |
+| `/admin/api/chatbots/{id}` | PUT/DELETE | 챗봇 수정/삭제 |
+| `/api/permissions/` | GET/POST | 접근 권한 관리 |
+| `/api/conversations/stats` | GET | 대화 통계 |
+| `/health` | GET | 헬스체크 |
 
-## API 엔드포인트
+---
 
-| 엔드포인트 | 설명 |
-|-----------|------|
-| `GET /api/chatbots` | 활성 챗봇 목록 |
-| `POST /api/chat` | 챗봇 대화 (SSE 스트리밍) |
-| `POST /api/sessions` | 세션 생성 |
-| `GET /api/sessions/{id}/history` | 대화 기록 |
-| `GET /api/admin/chatbots` | 전체 챗봇 관리 |
+## 핵심 설정
+
+`config.py` 또는 `.env` 파일로 설정합니다.
+
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `USE_MOCK_DB` | `true` | `false` → PostgreSQL 사용 |
+| `USE_MOCK_AUTH` | `true` | `false` → SSO 인증 사용 |
+| `LLM_BASE_URL` | `http://localhost:11434/v1` | LLM API 엔드포인트 |
+| `INGESTION_BASE_URL` | `http://localhost:8001` | 벡터 검색 서버 |
+| `PORT` | `8080` | 서버 포트 |
+
+전체 환경변수 목록: [docs/05_CONFIGURATION.md](docs/05_CONFIGURATION.md)
+
+---
 
 ## 디렉토리 구조
 
 ```
 multi-custom-agent/
-├── backend/          # FastAPI 서버
-│   ├── api/         # API 라우터
-│   ├── managers/    # 챗봇/세션/메모리 관리
+├── app.py              # FastAPI 앱 진입점
+├── config.py           # 전역 설정
+├── requirements.txt    # Python 의존성
+├── backend/            # 백엔드 핵심 로직
+│   ├── api/            # REST API 라우터
+│   ├── core/           # 도메인 모델 & 팩토리
+│   ├── managers/       # 챗봇/세션/메모리 관리
+│   ├── executors/      # 실행 엔진
 │   └── ...
-├── chatbots/        # 챗봇 설정 JSON
-├── static/          # 웹 UI
-└── docs/            # 문서
+├── chatbots/           # 챗봇 정의 JSON 파일
+├── database/           # PostgreSQL 스키마
+├── static/             # 웹 UI
+├── tests/              # 통합 테스트
+└── docs/               # 문서
 ```
-
-## 설정
-
-`config.py` 또는 `.env` 파일로 설정:
-
-### 기본 설정
-- `PORT` - 서버 포트 (기본: 8080)
-- `HOST` - 서버 호스트 (기본: 0.0.0.0)
-- `USE_MOCK_DB=true` - Mock DB 사용 (PostgreSQL 연결 시 false)
-- `USE_MOCK_AUTH=true` - Mock 인증 사용 (SSO 연동 시 false)
-- `LLM_BASE_URL` - LLM API 엔드포인트
-- `INGESTION_BASE_URL` - 문서 검색 서버
-
-### SSO 연동 (사내 환경)
-
-`.env` 파일에 아래 설정 추가:
-
-```bash
-# Mock Auth 비활성화
-USE_MOCK_AUTH=false
-
-# 사내 SSO 정보 (OIDC/OAuth2)
-SSO_ISSUER=https://sso.company.com
-SSO_CLIENT_ID=your-client-id
-SSO_CLIENT_SECRET=your-client-secret
-SSO_REDIRECT_URI=http://localhost:8080/auth/acs
-
-# 세션 보안 키 (32바이트 이상)
-SECRET_KEY=$(openssl rand -base64 32)
-```
-
-SSO 연동 상세 가이드: [docs/SSO_INTEGRATION.md](docs/SSO_INTEGRATION.md)
