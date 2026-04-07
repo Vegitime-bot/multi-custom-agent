@@ -14,7 +14,8 @@ import re
 import asyncio
 import os
 import logging
-from typing import Generator, Optional, List, Tuple, Dict, Any
+from dataclasses import dataclass, field
+from typing import Generator, Optional, List, Tuple, Dict, Any, Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from backend.core.models import ChatbotDef, ExecutionRole, Message
@@ -34,10 +35,17 @@ def get_hybrid_score_threshold() -> float:
     return float(os.getenv('HYBRID_SCORE_THRESHOLD', '0.15'))
 
 
+@dataclass
+class DelegateResult:
+    """위임 결정 결과"""
+    target: Literal['self', 'sub', 'parent', 'fallback']
+    reason: str = ""
+
+
 class HierarchicalAgentExecutor(AgentExecutor):
     """
     계층적 Agent Executor (3-tier hierarchy 지원)
-    
+
     실행 흐름:
     1. 자체 DB로 답변 시도
     2. 검색 결과 기반 Confidence 계산
@@ -48,7 +56,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
          - 부모 없으면 (Root) 실패 처리 또는 sub_chatbots 시도
     4. Context 누적 및 상위 전달
     5. Root에서 최종 합성
-    
+
     위임 체인:
     User Query
        ↓
@@ -76,11 +84,11 @@ class HierarchicalAgentExecutor(AgentExecutor):
     # 하이브리드 가중치 (keyword : embedding)
     KEYWORD_WEIGHT = 0.4
     EMBEDDING_WEIGHT = 0.6
-    
+
     # 하이브리드 스코어 임계값 (이 값 이상인 후보만 선택)
     # 환경변수 HYBRID_SCORE_THRESHOLD로 오버라이드 가능
     HYBRID_SCORE_THRESHOLD = get_hybrid_score_threshold()
-    
+
     # 위임 관련 상수
     DEFAULT_DELEGATION_THRESHOLD = 70
     MAX_DELEGATION_DEPTH = 5  # 최대 위임 깊이
@@ -98,7 +106,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         self.chatbot_manager = chatbot_manager
         self.accumulated_context = accumulated_context  # 상위에서 전달된 컨텍스트
         self.delegation_depth = delegation_depth  # 현재 위임 깊이 (순환 방지)
-        
+
         # Policy 설정
         self.delegation_threshold = chatbot_def.policy.get(
             'delegation_threshold', self.DEFAULT_DELEGATION_THRESHOLD
@@ -113,7 +121,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         self.enable_parent_delegation = chatbot_def.policy.get(
             'enable_parent_delegation', True
         )  # 상위 위임 활성화 여부
-        
+
         self._embedding_service = get_embedding_service()
 
     def execute(
@@ -123,14 +131,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
     ) -> Generator[str, None, None]:
         """
         계층적 Agent 실행
-        
-        위임 체인:
-        1. 자체 답변 시도 (Confidence 계산)
-        2. Confidence 낮음:
-           a. sub_chatbots 있으면 하위로 위임
-           b. sub_chatbots 없거나 실패:
-              - 부모 있으면 부모로 위임
-              - 부모 없으면 (Root) 최종 시도 또는 실패
+
+        Phase 1: 자체 답변 시도 (RAG 검색 + Confidence 계산)
+        Phase 2: 위임 결정 및 실행 (_select_delegate_target → _delegate or _respond_directly)
+        Phase 3: Fallback 처리 (_respond_uncertain)
         """
         logger.info(f"[EXECUTE] Chatbot: {self.chatbot_def.name} (ID: {self.chatbot_def.id})")
         logger.info(f"[EXECUTE] Message: {message[:50]}...")
@@ -138,73 +142,117 @@ class HierarchicalAgentExecutor(AgentExecutor):
         logger.info(f"[EXECUTE] Delegation depth: {self.delegation_depth}")
         logger.info(f"[EXECUTE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}")
         logger.info(f"[EXECUTE] Parent ID: {self.chatbot_def.parent_id}")
-        
+
         # 위임 깊이 초과 체크
         if self.delegation_depth >= self.MAX_DELEGATION_DEPTH:
             logger.warning(f"[EXECUTE] Max delegation depth exceeded: {self.delegation_depth}")
             yield f"⚠️ 최대 위임 깊이({self.MAX_DELEGATION_DEPTH})를 초과했습니다. "
             yield f"현재 Agent [{self.chatbot_def.name}]가 최선의 답변을 제공합니다.\n\n"
-            for chunk in self._execute_with_context(message, session_id, ""):
-                yield chunk
+            yield from self._execute_with_context(message, session_id, "")
             return
 
-        # 1. RAG 검색 수행
+        # Phase 1: RAG 검색 및 Confidence 계산
         context = self._retrieve(message, self.chatbot_def.retrieval.db_ids)
         logger.info(f"[EXECUTE] Retrieved context length: {len(context)} chars")
         logger.info(f"[EXECUTE] DB IDs: {self.chatbot_def.retrieval.db_ids}")
-        
-        # 누적 컨텍스트 결합 (상위에서 전달된 컨텍스트가 있으면 결합)
+
         combined_context = self._combine_contexts(self.accumulated_context, context)
-        
-        # 2. 검색 결과 기반 Confidence 계산
         confidence = self._calculate_confidence(combined_context, message)
         logger.info(f"[EXECUTE] Confidence: {confidence}% (threshold: {self.delegation_threshold}%)")
-        
-        # 3. Confidence 체크 및 위임 결정
-        if confidence < self.delegation_threshold:
-            # 먼저 하위 Agent 위임 시도 (기존 동작)
-            if self.chatbot_def.sub_chatbots:
-                yield from self._delegate_to_sub_chatbots(
-                    message, session_id, combined_context, confidence
-                )
-            # 하위 Agent 없거나 실패 시 부모로 위임 (신규)
-            elif self.enable_parent_delegation and self.chatbot_def.parent_id:
-                yield from self._delegate_to_parent(
-                    message, session_id, combined_context, confidence
-                )
-            else:
-                # 위임할 곳이 없음 - Root거나 Leaf
-                if self.chatbot_def.is_root:
-                    # Root: 최종 답변 제공
-                    yield from self._execute_final(
-                        message, session_id, combined_context, confidence
-                    )
-                else:
-                    # Leaf but has parent: delegate up
-                    if self.enable_parent_delegation and self.chatbot_def.parent_id:
-                        yield from self._delegate_to_parent(
-                            message, session_id, combined_context, confidence
-                        )
-                    else:
-                        yield from self._execute_final(
-                            message, session_id, combined_context, confidence
-                        )
+
+        # Phase 2: 위임 결정 및 실행
+        delegate = self._select_delegate_target(confidence)
+        logger.info(
+            f"[DELEGATION PATH] {self.chatbot_def.name} → {delegate.target.upper()} | {delegate.reason}"
+        )
+
+        if delegate.target == 'self':
+            yield from self._respond_directly(message, session_id, combined_context, confidence)
+        elif delegate.target in ('sub', 'parent'):
+            yield from self._delegate(message, session_id, combined_context, confidence, delegate)
         else:
-            # Confidence 충분 - 자체 답변
-            yield from self._execute_confident(
-                message, session_id, combined_context, confidence
+            # Phase 3: Fallback
+            yield from self._respond_uncertain(message, session_id, combined_context, confidence)
+
+    # ====================================================================
+    # Phase 2: 위임 결정
+    # ====================================================================
+
+    def _select_delegate_target(self, confidence: float) -> DelegateResult:
+        """
+        단일 책임: 위임 대상 결정
+
+        Returns:
+            DelegateResult(target='self'|'sub'|'parent'|'fallback')
+        """
+        if confidence >= self.delegation_threshold:
+            return DelegateResult(
+                target='self',
+                reason=f"confidence {confidence}% >= threshold {self.delegation_threshold}%",
             )
 
-    def _combine_contexts(self, accumulated: str, current: str) -> str:
-        """
-        누적된 컨텍스트와 현재 컨텍스트를 결합
-        """
-        if not accumulated:
-            return current
-        if not current:
-            return accumulated
-        
-        return f"[상위 컨텍스트]\n{accumulated}\n\n[현재 검색 결과]\n{current}"
+        if self.chatbot_def.sub_chatbots:
+            return DelegateResult(
+                target='sub',
+                reason=f"confidence {confidence}% < threshold, has sub_chatbots",
+            )
+
+        if self.enable_parent_delegation and self.chatbot_def.parent_id:
+            return DelegateResult(
+                target='parent',
+                reason=f"confidence {confidence}% < threshold, no sub_chatbots, has parent",
+            )
+
+        return DelegateResult(
+            target='fallback',
+            reason=f"confidence {confidence}% < threshold, no delegation target available",
+        )
+
+    def _delegate(
+        self,
+        message: str,
+        session_id: str,
+        context: str,
+        confidence: float,
+        delegate: DelegateResult,
+    ) -> Generator[str, None, None]:
+        """위임 실행 - sub 또는 parent로 라우팅"""
+        if delegate.target == 'sub':
+            yield from self._delegate_to_sub_chatbots(message, session_id, context, confidence)
+        else:
+            yield from self._delegate_to_parent(message, session_id, context, confidence)
+
+    # ====================================================================
+    # Phase 2a/2b: 직접 응답 / 불확실 응답
+    # ====================================================================
+
+    def _respond_directly(
+        self,
+        message: str,
+        session_id: str,
+        context: str,
+        confidence: float,
+    ) -> Generator[str, None, None]:
+        """Confidence 충분 - 자체 답변"""
+        yield f"📢 **[{self.chatbot_def.name}]** (신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n\n"
+        yield from self._execute_with_context(message, session_id, context)
+
+    def _respond_uncertain(
+        self,
+        message: str,
+        session_id: str,
+        context: str,
+        confidence: float,
+    ) -> Generator[str, None, None]:
+        """위임 대상 없음 - 최선의 답변 제공 (Fallback)"""
+        yield f"📢 **[{self.chatbot_def.name}]** (최종 답변 / 신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n\n"
+        if self.accumulated_context:
+            yield "*(하위 Agent들의 컨텍스트를 종합하여 답변합니다)*\n\n"
+        yield from self._execute_with_context(message, session_id, context)
+
+    # ====================================================================
+    # 하위 Agent 위임
+    # ====================================================================
 
     def _delegate_to_sub_chatbots(
         self,
@@ -213,79 +261,95 @@ class HierarchicalAgentExecutor(AgentExecutor):
         context: str,
         confidence: float,
     ) -> Generator[str, None, None]:
-        """하위 챗봇으로 위임 (기존 동행 개선)"""
+        """하위 챗봇으로 위임"""
         logger.info(f"[DELEGATE] Starting sub delegation from {self.chatbot_def.name}")
         logger.info(f"[DELEGATE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}")
-        
+
         yield f"📋 이 질문은 전문가 상담이 필요합니다.\n\n"
         yield f"({self.chatbot_def.name} 신뢰도: {confidence}% → 하위 Agent 위임)\n\n"
         yield f"---\n📡 **전문가 챗봇을 호출합니다...**\n\n"
-        
+
         if self.multi_sub_execution:
-            logger.info(f"[DELEGATE] Multi-sub execution enabled")
-            # 다중 하위 Agent 선택 및 실행
-            sub_candidates = self._select_sub_chatbot_hybrid_multi(message)
-            logger.info(f"[DELEGATE] Selected {len(sub_candidates)} candidates")
-            for chatbot, info, scores in sub_candidates:
-                logger.info(f"[DELEGATE]   - {chatbot.name} (ID: {chatbot.id}): hybrid={scores['hybrid']:.3f}, kw={scores['keyword']:.3f}, emb={scores['embedding']:.3f}")
-                yield f"**선택된 전문가**: {', '.join([c[0].name for c in sub_candidates])}\n\n"
-                
-                # 다중 하위 Agent 실행
-                sub_responses = self._execute_multiple_subs(
-                    sub_candidates, message, session_id, context
-                )
-                
-                if sub_responses:
-                    # 응답 종합
-                    yield f"\n---\n🔄 **응답을 종합하는 중입니다...**\n\n"
-                    synthesized = self._synthesize_responses(
-                        parent_context=context,
-                        user_message=message,
-                        sub_responses=sub_responses
-                    )
-                    yield synthesized
-                else:
-                    # 하위 Agent 실패 - 부모로 위임 시도
-                    if self.enable_parent_delegation and self.chatbot_def.parent_id:
-                        yield "\n❌ 하위 Agent들이 응답할 수 없습니다. 상위 Agent로 위임합니다...\n"
-                        yield from self._delegate_to_parent(
-                            message, session_id, context, confidence
-                        )
-                    else:
-                        yield "❌ 하위 Agent 실행 중 오류가 발생했습니다.\n"
-                        for chunk in self._execute_with_context(message, session_id, context):
-                            yield chunk
-            else:
-                # 적합한 하위 Agent 없음 - 부모로 위임
-                if self.enable_parent_delegation and self.chatbot_def.parent_id:
-                    yield "\n⚠️ 적합한 하위 Agent를 찾을 수 없습니다. 상위 Agent로 위임합니다...\n"
-                    yield from self._delegate_to_parent(
-                        message, session_id, context, confidence
-                    )
-                else:
-                    yield "❌ 적합한 하위 Agent를 찾을 수 없습니다.\n"
-                    for chunk in self._execute_with_context(message, session_id, context):
-                        yield chunk
+            yield from self._delegate_to_multi_subs(message, session_id, context, confidence)
         else:
-            # 단일 하위 Agent 실행
-            sub_chatbot, selection_info = self._select_sub_chatbot_hybrid(message)
-            if sub_chatbot:
-                yield f"**[{sub_chatbot.name}]** {selection_info}\n\n"
-                for sub_chunk in self._delegate_to_sub(
-                    sub_chatbot, message, session_id, context
-                ):
-                    yield sub_chunk
-            else:
-                # 하위 Agent 선택 실패 - 부모로 위임
-                if self.enable_parent_delegation and self.chatbot_def.parent_id:
-                    yield "\n⚠️ 적합한 하위 Agent를 찾을 수 없습니다. 상위 Agent로 위임합니다...\n"
-                    yield from self._delegate_to_parent(
-                        message, session_id, context, confidence
-                    )
-                else:
-                    yield "❌ 적합한 하위 Agent를 찾을 수 없습니다.\n"
-                    for chunk in self._execute_with_context(message, session_id, context):
-                        yield chunk
+            yield from self._delegate_to_single_sub(message, session_id, context, confidence)
+
+    def _delegate_to_multi_subs(
+        self,
+        message: str,
+        session_id: str,
+        context: str,
+        confidence: float,
+    ) -> Generator[str, None, None]:
+        """다중 하위 Agent 선택 및 실행"""
+        logger.info("[DELEGATE] Multi-sub execution enabled")
+        sub_candidates = self._select_sub_chatbot_hybrid_multi(message)
+        logger.info(f"[DELEGATE] Selected {len(sub_candidates)} candidates")
+        for chatbot, info, scores in sub_candidates:
+            logger.info(
+                f"[DELEGATE]   - {chatbot.name} (ID: {chatbot.id}): "
+                f"hybrid={scores['hybrid']:.3f}, kw={scores['keyword']:.3f}, emb={scores['embedding']:.3f}"
+            )
+
+        if not sub_candidates:
+            logger.info("[DELEGATE] No multi-sub candidates found, falling back")
+            yield from self._fallback_to_parent_or_self(message, session_id, context, confidence,
+                                                         reason="적합한 하위 Agent를 찾을 수 없습니다")
+            return
+
+        yield f"**선택된 전문가**: {', '.join([c[0].name for c in sub_candidates])}\n\n"
+        sub_responses = self._execute_multiple_subs(sub_candidates, message, session_id, context)
+
+        if sub_responses:
+            yield "\n---\n🔄 **응답을 종합하는 중입니다...**\n\n"
+            synthesized = self._synthesize_responses(
+                parent_context=context,
+                user_message=message,
+                sub_responses=sub_responses,
+            )
+            yield synthesized
+        else:
+            yield from self._fallback_to_parent_or_self(message, session_id, context, confidence,
+                                                         reason="하위 Agent들이 응답할 수 없습니다")
+
+    def _delegate_to_single_sub(
+        self,
+        message: str,
+        session_id: str,
+        context: str,
+        confidence: float,
+    ) -> Generator[str, None, None]:
+        """단일 하위 Agent 선택 및 실행"""
+        sub_chatbot, selection_info = self._select_sub_chatbot_hybrid(message)
+        if sub_chatbot:
+            logger.info(f"[DELEGATE] Single sub selected: {sub_chatbot.name} {selection_info}")
+            yield f"**[{sub_chatbot.name}]** {selection_info}\n\n"
+            yield from self._delegate_to_sub(sub_chatbot, message, session_id, context)
+        else:
+            yield from self._fallback_to_parent_or_self(message, session_id, context, confidence,
+                                                         reason="적합한 하위 Agent를 찾을 수 없습니다")
+
+    def _fallback_to_parent_or_self(
+        self,
+        message: str,
+        session_id: str,
+        context: str,
+        confidence: float,
+        reason: str = "",
+    ) -> Generator[str, None, None]:
+        """하위 위임 실패 시 부모 또는 자체 응답으로 Fallback"""
+        if self.enable_parent_delegation and self.chatbot_def.parent_id:
+            logger.info(f"[DELEGATE] Falling back to parent: {reason}")
+            yield f"\n⚠️ {reason}. 상위 Agent로 위임합니다...\n"
+            yield from self._delegate_to_parent(message, session_id, context, confidence)
+        else:
+            logger.info(f"[DELEGATE] Falling back to self: {reason}")
+            yield f"❌ {reason}.\n"
+            yield from self._execute_with_context(message, session_id, context)
+
+    # ====================================================================
+    # 상위 Agent 위임
+    # ====================================================================
 
     def _delegate_to_parent(
         self,
@@ -294,81 +358,55 @@ class HierarchicalAgentExecutor(AgentExecutor):
         context: str,
         confidence: float,
     ) -> Generator[str, None, None]:
-        """
-        상위(부모) Agent로 위임
-        
-        Args:
-            message: 사용자 메시지
-            session_id: 세션 ID
-            context: 누적된 컨텍스트
-            confidence: 현재 Confidence (로깅용)
-        """
+        """상위(부모) Agent로 위임"""
         if not self.chatbot_manager:
+            logger.warning("[DELEGATE] No chatbot_manager, cannot delegate to parent")
             yield "❌ ChatbotManager가 설정되지 않아 부모 Agent로 위임할 수 없습니다.\n"
-            for chunk in self._execute_with_context(message, session_id, context):
-                yield chunk
+            yield from self._execute_with_context(message, session_id, context)
             return
-        
+
         parent_id = self.chatbot_def.parent_id
         if not parent_id:
+            logger.warning("[DELEGATE] No parent_id set")
             yield "⚠️ 부모 Agent가 없습니다. 현재 Agent로 답변합니다.\n"
-            for chunk in self._execute_with_context(message, session_id, context):
-                yield chunk
+            yield from self._execute_with_context(message, session_id, context)
             return
-        
+
         parent_def = self.chatbot_manager.get_active(parent_id)
         if not parent_def:
+            logger.warning(f"[DELEGATE] Parent '{parent_id}' not found")
             yield f"⚠️ 부모 Agent '{parent_id}'를 찾을 수 없습니다. 현재 Agent로 답변합니다.\n"
-            for chunk in self._execute_with_context(message, session_id, context):
-                yield chunk
+            yield from self._execute_with_context(message, session_id, context)
             return
-        
-        # 위임 정보 출력
+
+        logger.info(
+            f"[DELEGATION PATH] {self.chatbot_def.name} (L{self.chatbot_def.level}) "
+            f"→ {parent_def.name} (L{parent_def.level}) | confidence={confidence}%"
+        )
         yield f"\n📤 **[{self.chatbot_def.name}] → [{parent_def.name}]**로 위임합니다.\n"
         yield f"(Confidence: {confidence}% / Level: {self.chatbot_def.level} → {parent_def.level})\n\n"
-        
-        # 상위 Executor 생성 (누적 컨텍스트 전달)
+
         parent_executor = HierarchicalAgentExecutor(
             chatbot_def=parent_def,
             ingestion_client=self.ingestion,
             memory_manager=self.memory,
             chatbot_manager=self.chatbot_manager,
-            accumulated_context=context,  # 컨텍스트 누적
-            delegation_depth=self.delegation_depth + 1,  # 위임 깊이 증가
+            accumulated_context=context,
+            delegation_depth=self.delegation_depth + 1,
         )
-        
-        # 부모 Agent 실행
-        for chunk in parent_executor.execute(message, session_id):
-            yield chunk
+        yield from parent_executor.execute(message, session_id)
 
-    def _execute_confident(
-        self,
-        message: str,
-        session_id: str,
-        context: str,
-        confidence: float,
-    ) -> Generator[str, None, None]:
-        """Confidence가 충분한 경우 실행"""
-        yield f"📢 **[{self.chatbot_def.name}]** (신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n\n"
-        for chunk in self._execute_with_context(message, session_id, context):
-            yield chunk
+    # ====================================================================
+    # 공통 실행
+    # ====================================================================
 
-    def _execute_final(
-        self,
-        message: str,
-        session_id: str,
-        context: str,
-        confidence: float,
-    ) -> Generator[str, None, None]:
-        """최종 답변 (Root에서 호출)"""
-        yield f"📢 **[{self.chatbot_def.name}]** (최종 답변 / 신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n\n"
-        
-        # 누적된 컨텍스트가 있으면 활용하여 향상된 답변 생성
-        if self.accumulated_context:
-            yield "*(하위 Agent들의 컨텍스트를 종합하여 답변합니다)*\n\n"
-        
-        for chunk in self._execute_with_context(message, session_id, context):
-            yield chunk
+    def _combine_contexts(self, accumulated: str, current: str) -> str:
+        """누적된 컨텍스트와 현재 컨텍스트를 결합"""
+        if not accumulated:
+            return current
+        if not current:
+            return accumulated
+        return f"[상위 컨텍스트]\n{accumulated}\n\n[현재 검색 결과]\n{current}"
 
     def _execute_with_context(
         self,
@@ -378,7 +416,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
     ) -> Generator[str, None, None]:
         """주어진 컨텍스트로 Agent 실행"""
         history = self.memory.get_history(self.chatbot_def.id, session_id)
-        
+
         messages = self._build_messages_with_history(
             system_prompt=self.chatbot_def.system_prompt,
             history=history,
@@ -391,7 +429,6 @@ class HierarchicalAgentExecutor(AgentExecutor):
             full_response.append(chunk)
             yield chunk
 
-        # 메모리 저장
         self.memory.append_pair(
             chatbot_id=self.chatbot_def.id,
             session_id=session_id,
@@ -403,6 +440,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
     # ====================================================================
     # 하위 Agent 선택 (하이브리드 방식)
     # ====================================================================
+
     def _select_sub_chatbot_hybrid(self, message: str) -> Tuple[Optional[ChatbotDef], str]:
         """하이브리드 하위 Agent 선택 (단일 반환)"""
         candidates = self._select_sub_chatbot_hybrid_multi(message)
@@ -420,7 +458,6 @@ class HierarchicalAgentExecutor(AgentExecutor):
             return []
 
         candidates = []
-
         for sub_ref in self.chatbot_def.sub_chatbots:
             sub_def = self.chatbot_manager.get_active(sub_ref.id)
             if not sub_def:
@@ -453,53 +490,48 @@ class HierarchicalAgentExecutor(AgentExecutor):
         if not filtered:
             keyword_matches = [s for s in scores if s['keyword'] >= 0.3]
             if keyword_matches:
-                # Sort by keyword score descending, then hybrid
                 keyword_matches.sort(key=lambda x: (x['keyword'], x['hybrid']), reverse=True)
-                filtered = keyword_matches[:1]  # Take the best keyword match
+                filtered = keyword_matches[:1]
             elif scores:
-                # Ultimate fallback: include top candidate even if below threshold
                 filtered = scores[:1]
 
         selected = filtered[:self.max_parallel_subs]
 
-        result = []
-        for s in selected:
-            info = f"(kw:{s['keyword']}, emb:{s['embedding']}, hybrid:{s['hybrid']})"
-            result.append((s['chatbot'], info, {
+        return [
+            (s['chatbot'], f"(kw:{s['keyword']}, emb:{s['embedding']}, hybrid:{s['hybrid']})", {
                 'keyword': s['keyword'],
                 'embedding': s['embedding'],
-                'hybrid': s['hybrid']
-            }))
-
-        return result
+                'hybrid': s['hybrid'],
+            })
+            for s in selected
+        ]
 
     def _keyword_score(self, chatbot_id: str, message_lower: str) -> float:
         """키워드 매칭 점수 (0~1 정규화)"""
         keywords = self.KEYWORDS_MAP.get(chatbot_id, [])
         if not keywords:
             return 0.0
-        
         matched = sum(1 for kw in keywords if kw.lower() in message_lower)
         return min(matched / max(len(keywords) * 0.3, 1), 1.0)
 
     def _embedding_score(self, message: str, sub_def: ChatbotDef) -> float:
         """임베딩 코사인 유사도 점수 (0~1)"""
         profile_parts = [sub_def.name, sub_def.description]
-        
+
         keywords = self.KEYWORDS_MAP.get(sub_def.id, [])
         if keywords:
             profile_parts.append(' '.join(keywords))
-        
+
         if sub_def.system_prompt:
             profile_parts.append(sub_def.system_prompt[:200])
-        
+
         profile_text = ' '.join(profile_parts)
-        
         return self._embedding_service.cosine_similarity(message, profile_text)
 
     # ====================================================================
     # 다중 하위 Agent 실행
     # ====================================================================
+
     def _execute_multiple_subs(
         self,
         sub_candidates: List[Tuple[ChatbotDef, str, dict]],
@@ -512,10 +544,9 @@ class HierarchicalAgentExecutor(AgentExecutor):
             return self._execute_multiple_subs_sequential(
                 sub_candidates, message, session_id, parent_context
             )
-        else:
-            return self._execute_multiple_subs_parallel(
-                sub_candidates, message, session_id, parent_context
-            )
+        return self._execute_multiple_subs_parallel(
+            sub_candidates, message, session_id, parent_context
+        )
 
     def _execute_multiple_subs_sequential(
         self,
@@ -526,21 +557,13 @@ class HierarchicalAgentExecutor(AgentExecutor):
     ) -> List[Tuple[str, str, str]]:
         """순차적으로 다중 하위 Agent 실행"""
         results = []
-        
         for sub_chatbot, selection_info, scores in sub_candidates:
             try:
-                response = self._execute_single_sub(
-                    sub_chatbot, message, session_id, parent_context
-                )
+                response = self._execute_single_sub(sub_chatbot, message, session_id, parent_context)
                 if response:
                     results.append((sub_chatbot.id, sub_chatbot.name, response))
             except Exception as e:
-                results.append((
-                    sub_chatbot.id,
-                    sub_chatbot.name,
-                    f"[오류: 응답 생성 실패 - {str(e)}]"
-                ))
-        
+                results.append((sub_chatbot.id, sub_chatbot.name, f"[오류: 응답 생성 실패 - {str(e)}]"))
         return results
 
     def _execute_multiple_subs_parallel(
@@ -553,32 +576,26 @@ class HierarchicalAgentExecutor(AgentExecutor):
         """병렬로 다중 하위 Agent 실행"""
         results = []
         errors = []
-        
+
         def execute_single(sub_chatbot: ChatbotDef) -> Tuple[str, str, Optional[str]]:
             try:
-                response = self._execute_single_sub(
-                    sub_chatbot, message, session_id, parent_context
-                )
+                response = self._execute_single_sub(sub_chatbot, message, session_id, parent_context)
                 return (sub_chatbot.id, sub_chatbot.name, response)
-            except Exception as e:
+            except Exception:
                 return (sub_chatbot.id, sub_chatbot.name, None)
-        
+
         with ThreadPoolExecutor(max_workers=min(len(sub_candidates), 5)) as executor:
-            future_to_sub = {
-                executor.submit(execute_single, sub[0]): sub 
-                for sub in sub_candidates
-            }
-            
+            future_to_sub = {executor.submit(execute_single, sub[0]): sub for sub in sub_candidates}
             for future in as_completed(future_to_sub):
                 sub_id, sub_name, response = future.result()
                 if response:
                     results.append((sub_id, sub_name, response))
                 else:
                     errors.append((sub_id, sub_name))
-        
+
         if errors:
-            print(f"[HierarchicalAgentExecutor] Failed sub-agents: {errors}")
-        
+            logger.warning(f"[DELEGATE] Failed sub-agents: {errors}")
+
         return results
 
     def _execute_single_sub(
@@ -591,21 +608,12 @@ class HierarchicalAgentExecutor(AgentExecutor):
         """단일 하위 Agent 실행 (전체 응답 수집)"""
         from backend.executors import AgentExecutor
 
-        sub_executor = AgentExecutor(
-            sub_chatbot,
-            self.ingestion,
-            self.memory
-        )
-        
+        sub_executor = AgentExecutor(sub_chatbot, self.ingestion, self.memory)
         enhanced_message = message
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
-        full_response = []
-        for chunk in sub_executor.execute(enhanced_message, session_id):
-            full_response.append(chunk)
-        
-        return "".join(full_response)
+        return "".join(sub_executor.execute(enhanced_message, session_id))
 
     def _delegate_to_sub(
         self,
@@ -614,25 +622,20 @@ class HierarchicalAgentExecutor(AgentExecutor):
         session_id: str,
         parent_context: str = "",
     ) -> Generator[str, None, None]:
-        """하위 Agent에게 위임 실행"""
+        """하위 Agent에게 위임 실행 (스트리밍)"""
         from backend.executors import AgentExecutor
 
-        sub_executor = AgentExecutor(
-            sub_chatbot,
-            self.ingestion,
-            self.memory
-        )
-        
+        sub_executor = AgentExecutor(sub_chatbot, self.ingestion, self.memory)
         enhanced_message = message
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
-        for chunk in sub_executor.execute(enhanced_message, session_id):
-            yield chunk
+        yield from sub_executor.execute(enhanced_message, session_id)
 
     # ====================================================================
     # 응답 종합
     # ====================================================================
+
     def _synthesize_responses(
         self,
         parent_context: str,
@@ -642,22 +645,19 @@ class HierarchicalAgentExecutor(AgentExecutor):
         """다중 하위 Agent 응답을 종합하여 하나의 응답 생성"""
         if not sub_responses:
             return "❌ 하위 Agent로부터 응답을 받지 못했습니다."
-        
+
         if len(sub_responses) == 1:
             _, name, response = sub_responses[0]
             return f"**[{name}]**\n\n{response}"
-        
-        synthesis_prompt = self._build_synthesis_prompt(
-            parent_context, user_message, sub_responses
-        )
-        
+
+        synthesis_prompt = self._build_synthesis_prompt(parent_context, user_message, sub_responses)
+
         try:
             client = get_llm_client()
             messages = [
                 {"role": "system", "content": synthesis_prompt["system"]},
-                {"role": "user", "content": synthesis_prompt["user"]}
+                {"role": "user", "content": synthesis_prompt["user"]},
             ]
-            
             response = client.chat.completions.create(
                 model=self.chatbot_def.llm.model,
                 messages=messages,
@@ -665,17 +665,12 @@ class HierarchicalAgentExecutor(AgentExecutor):
                 max_tokens=2048,
                 stream=False,
             )
-            
             synthesized = response.choices[0].message.content or ""
-            
-            if sub_responses:
-                synthesized += "\n\n---\n**참고 전문가:** " + ", ".join([
-                    f"[{name}]" for _, name, _ in sub_responses
-                ])
-            
+            synthesized += "\n\n---\n**참고 전문가:** " + ", ".join(
+                [f"[{name}]" for _, name, _ in sub_responses]
+            )
             return synthesized
-            
-        except Exception as e:
+        except Exception:
             return self._fallback_synthesis(sub_responses)
 
     def _build_synthesis_prompt(
@@ -685,17 +680,14 @@ class HierarchicalAgentExecutor(AgentExecutor):
         sub_responses: List[Tuple[str, str, str]],
     ) -> dict:
         """응답 종합을 위한 프롬프트 구성"""
-        expert_responses = []
-        for sub_id, sub_name, response in sub_responses:
-            expert_responses.append(
-                f"### [{sub_name}]\n{response.strip()}"
-            )
-        
-        experts_text = "\n\n".join(expert_responses)
-        
+        experts_text = "\n\n".join(
+            f"### [{sub_name}]\n{response.strip()}"
+            for _, sub_name, response in sub_responses
+        )
+
         system_prompt = """당신은 여러 전문가 챗봇의 응답을 종합하는 통합 어시스턴트입니다.
 
-사용자의 질문에 대해 여러 전문가가 각자의 관점에서 답변했습니다. 
+사용자의 질문에 대해 여러 전문가가 각자의 관점에서 답변했습니다.
 이를 하나의 일관된 응답으로 정리해주세요.
 
 종합 시 다음 원칙을 따르세요:
@@ -725,10 +717,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         sub_responses: List[Tuple[str, str, str]],
     ) -> str:
         """LLM 종합 실패 시 수동 종합"""
-        parts = []
-        parts.append("다음은 관련 전문가들의 답변을 종합한 내용입니다:\n")
-        
-        for i, (sub_id, sub_name, response) in enumerate(sub_responses, 1):
+        parts = ["다음은 관련 전문가들의 답변을 종합한 내용입니다:\n"]
+        for _, sub_name, response in sub_responses:
             parts.append(f"\n**[{sub_name}]**\n{response}")
-        
         return "\n".join(parts)
