@@ -489,7 +489,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         scores = []
 
         for sub_def in candidates:
-            kw_score = self._keyword_score(sub_def.id, message_lower)
+            kw_score = self._keyword_score(sub_def, message_lower)
             emb_score = self._embedding_score(message, sub_def)
             hybrid = self.KEYWORD_WEIGHT * kw_score + self.EMBEDDING_WEIGHT * emb_score
 
@@ -524,11 +524,21 @@ class HierarchicalAgentExecutor(AgentExecutor):
             for s in selected
         ]
 
-    def _keyword_score(self, chatbot_id: str, message_lower: str) -> float:
-        """키워드 매칭 점수 (0~1 정규화)"""
-        keywords = self.KEYWORDS_MAP.get(chatbot_id, [])
+    def _keyword_score(self, sub_def: ChatbotDef, message_lower: str) -> float:
+        """키워드 매칭 점수 (0~1 정규화)
+
+        우선순위:
+        1) chatbot JSON policy.keywords
+        2) 코드 내 KEYWORDS_MAP
+        """
+        policy_keywords = []
+        if getattr(sub_def, 'policy', None):
+            policy_keywords = sub_def.policy.get('keywords', []) or []
+
+        keywords = policy_keywords if policy_keywords else self.KEYWORDS_MAP.get(sub_def.id, [])
         if not keywords:
             return 0.0
+
         matched = sum(1 for kw in keywords if kw.lower() in message_lower)
         return min(matched / max(len(keywords) * 0.3, 1), 1.0)
 
@@ -536,7 +546,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
         """임베딩 코사인 유사도 점수 (0~1)"""
         profile_parts = [sub_def.name, sub_def.description]
 
-        keywords = self.KEYWORDS_MAP.get(sub_def.id, [])
+        policy_keywords = []
+        if getattr(sub_def, 'policy', None):
+            policy_keywords = sub_def.policy.get('keywords', []) or []
+        keywords = policy_keywords if policy_keywords else self.KEYWORDS_MAP.get(sub_def.id, [])
         if keywords:
             profile_parts.append(' '.join(keywords))
 
