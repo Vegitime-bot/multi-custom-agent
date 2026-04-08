@@ -229,21 +229,6 @@ class TestExecuteDelegationDecision:
         parent_executor._delegate.assert_not_called()
         assert out == ["parent answer"]
 
-    def test_execute_mid_confidence_with_effective_parent_context_prefers_self(self, parent_executor):
-        """TC-EXEC-002: 중간 신뢰도(>=60)+유효 컨텍스트면 하위 위임 대신 parent 직접답변"""
-        parent_executor.self_answer_min_confidence = 60
-        parent_executor._retrieve = Mock(return_value="상위 챗봇 검색 결과: PDDI 일정/리스크/현황")
-        parent_executor._calculate_confidence = Mock(return_value=65)
-
-        parent_executor._respond_directly = Mock(return_value=iter(["parent answer by self-first"]))
-        parent_executor._delegate = Mock(return_value=iter(["delegated answer"]))
-
-        out = list(parent_executor.execute("PDDI 진행 상황 알려줘", "sess-2"))
-
-        parent_executor._respond_directly.assert_called_once()
-        parent_executor._delegate.assert_not_called()
-        assert out == ["parent answer by self-first"]
-
 
 class TestDelegationPathLogic:
     """Integration tests for delegation path priority"""

@@ -121,8 +121,6 @@ class HierarchicalAgentExecutor(AgentExecutor):
         self.enable_parent_delegation = chatbot_def.policy.get(
             'enable_parent_delegation', True
         )  # 상위 위임 활성화 여부
-        # 상위가 충분히 답변 가능할 때 하위 위임 억제 (기본 60)
-        self.self_answer_min_confidence = chatbot_def.policy.get('self_answer_min_confidence', 60)
 
         self._embedding_service = get_embedding_service()
 
@@ -163,22 +161,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         logger.info(f"[EXECUTE] Confidence: {confidence}% (threshold: {self.delegation_threshold}%)")
 
         # Phase 2: 위임 결정 및 실행
-        # 상위가 어느 정도 답변 가능하면(기본 60+) 하위 위임을 억제
-        if (
-            self.chatbot_def.sub_chatbots
-            and confidence >= self.self_answer_min_confidence
-            and self._has_effective_context(context)
-        ):
-            delegate = DelegateResult(
-                target='self',
-                reason=(
-                    f"confidence {confidence}% >= self_answer_min_confidence "
-                    f"{self.self_answer_min_confidence}%, effective parent context exists"
-                ),
-            )
-        else:
-            delegate = self._select_delegate_target(confidence)
-
+        delegate = self._select_delegate_target(confidence)
         logger.info(
             f"[DELEGATION PATH] {self.chatbot_def.name} → {delegate.target.upper()} | {delegate.reason}"
         )
@@ -244,14 +227,6 @@ class HierarchicalAgentExecutor(AgentExecutor):
         db_ids = getattr(chatbot.retrieval, 'db_ids', []) if hasattr(chatbot, 'retrieval') else []
         db_text = ', '.join(db_ids) if db_ids else '(없음)'
         return f"출처: {chatbot.name} (id={chatbot.id}, level={chatbot.level}, db={db_text})"
-
-    def _has_effective_context(self, context: str) -> bool:
-        """실제 검색 컨텍스트 유효성 판단 (빈/무결과 문구 제외)"""
-        if not context or not context.strip():
-            return False
-        if "관련 문서를 찾지 못했습니다" in context:
-            return False
-        return True
 
     # ====================================================================
     # Phase 2a/2b: 직접 응답 / 불확실 응답
@@ -647,10 +622,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
         sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
-        source_header = f"🧾 {self._source_note(sub_chatbot)}"
-        if parent_context:
-            source_header += f" | 참조 컨텍스트: {self._source_note(self.chatbot_def)}"
-        source_header += "\n\n"
+        source_header = f"🧾 {self._source_note(sub_chatbot)}\n\n"
         return source_header + sub_answer
 
     def _delegate_to_sub(
@@ -668,10 +640,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
-        source_header = f"🧾 {self._source_note(sub_chatbot)}"
-        if parent_context:
-            source_header += f" | 참조 컨텍스트: {self._source_note(self.chatbot_def)}"
-        yield source_header + "\n\n"
+        yield f"🧾 {self._source_note(sub_chatbot)}\n\n"
         yield from sub_executor.execute(enhanced_message, session_id)
 
     # ====================================================================
