@@ -189,6 +189,8 @@ MOCK_USER_DB_SCOPE = {
     "user-002": {"db_001"},  # 인사팀: 제한된 권한
     "user-003": {"db_002", "db_003"},  # 기술팀: 일부 권한
     "guest": {"db_001"},  # 게스트: 최소 권한
+    "jyd1234": {"db_001", "db_002", "db_003", "db_004", "db_005"},  # mock 기본 사용자
+    "yd86.jang": {"db_001", "db_002", "db_003", "db_004", "db_005", "snp"},  # 실제 사용자
 }
 
 def get_user_db_scope(user: dict) -> set[str]:
