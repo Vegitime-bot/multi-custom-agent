@@ -42,6 +42,30 @@
       align-self: center; font-size: 0.82rem; border-radius: 8px; padding: 6px 12px;
     }
 
+    /* Markdown table styles */
+    .message.assistant table {
+      border-collapse: collapse;
+      margin: 8px 0;
+      width: 100%;
+      font-size: 0.9rem;
+    }
+    .message.assistant th,
+    .message.assistant td {
+      border: 1px solid #ddd;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    .message.assistant th {
+      background: #f5f5f5;
+      font-weight: 600;
+    }
+    .message.assistant tr:nth-child(even) {
+      background: #fafafa;
+    }
+    .message.assistant tr:hover {
+      background: #f0f0f0;
+    }
+
     #input-area {
       padding: 12px 20px; background: #fff;
       border-top: 1px solid #e0e0e0;
@@ -125,10 +149,78 @@
   });
 
   // ── 메시지 렌더링 ────────────────────────────────────────────────
+  // Markdown table parser
+  function parseMarkdownTable(text) {
+    // Match table pattern: | col1 | col2 |
+    const tableRegex = /\|([^\n]+)\|/;
+    if (!tableRegex.test(text)) return text;
+
+    const lines = text.split('\n');
+    let result = [];
+    let inTable = false;
+    let tableHtml = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      // Check if line is a table row
+      if (line.startsWith('|') && line.endsWith('|')) {
+        if (!inTable) {
+          inTable = true;
+          tableHtml = ['<table>'];
+        }
+
+        const cells = line.split('|').filter(c => c.trim() !== '');
+
+        // Skip separator line (contains only dashes and |)
+        if (cells.every(c => /^[-\s]+$/.test(c.trim()))) {
+          continue;
+        }
+
+        // First row is header
+        if (tableHtml.length === 1) {
+          tableHtml.push('<thead><tr>');
+          cells.forEach(cell => {
+            tableHtml.push(`<th>${cell.trim()}</th>`);
+          });
+          tableHtml.push('</tr></thead><tbody>');
+        } else {
+          tableHtml.push('<tr>');
+          cells.forEach(cell => {
+            tableHtml.push(`<td>${cell.trim()}</td>`);
+          });
+          tableHtml.push('</tr>');
+        }
+      } else {
+        if (inTable) {
+          tableHtml.push('</tbody></table>');
+          result.push(tableHtml.join(''));
+          inTable = false;
+          tableHtml = [];
+        }
+        if (line) result.push(line);
+      }
+    }
+
+    if (inTable) {
+      tableHtml.push('</tbody></table>');
+      result.push(tableHtml.join(''));
+    }
+
+    return result.join('\n');
+  }
+
   function addMessage(role, content) {
     const div = document.createElement('div');
     div.className = `message ${role}`;
-    div.textContent = content;
+
+    // Parse markdown tables for assistant messages
+    if (role === 'assistant') {
+      div.innerHTML = parseMarkdownTable(content);
+    } else {
+      div.textContent = content;
+    }
+
     chatContainer.appendChild(div);
     chatContainer.scrollTop = chatContainer.scrollHeight;
     return div;
@@ -205,7 +297,7 @@
                   const chunk = JSON.parse(raw);
                   if (typeof chunk === 'string') {
                     fullText += chunk;
-                    assistantDiv.textContent = fullText;
+                    assistantDiv.innerHTML = parseMarkdownTable(fullText);
                   }
                 } catch {}
               }
@@ -234,7 +326,7 @@
               const chunk = JSON.parse(raw);
               if (typeof chunk === 'string') {
                 fullText += chunk;
-                assistantDiv.textContent = fullText;
+                assistantDiv.innerHTML = parseMarkdownTable(fullText);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
               }
             } catch {}
