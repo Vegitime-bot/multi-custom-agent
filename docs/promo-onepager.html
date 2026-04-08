@@ -2,78 +2,125 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Multi Custom Agent - One Pager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Multi Custom Agent Service</title>
   <style>
-    body{font-family:Arial,sans-serif;background:#f4f7fb;color:#1f2937;margin:0}
-    .wrap{max-width:980px;margin:32px auto;background:#fff;border-radius:16px;padding:28px;box-shadow:0 10px 25px rgba(0,0,0,.08)}
-    h1{margin:0 0 8px;color:#0f172a}
-    .sub{color:#475569;margin-bottom:20px}
-    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-    .card{border:1px solid #e2e8f0;border-radius:12px;padding:14px}
-    .card h3{margin:0 0 8px;font-size:16px}
-    .badge{display:inline-block;background:#dbeafe;color:#1e40af;padding:4px 8px;border-radius:999px;font-size:12px;margin-right:6px}
-    ul{margin:8px 0 0 18px}
-    .hero{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;padding:16px;border-radius:12px;margin-bottom:14px}
-    .footer{margin-top:18px;color:#64748b;font-size:13px}
+    :root{--bg:#f8fafc;--card:#fff;--ink:#0f172a;--sub:#475569;--line:#e2e8f0;--blue:#2563eb;--blue2:#1d4ed8;--mint:#10b981}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+    .wrap{max-width:1200px;margin:0 auto;padding:28px}
+    .hero{background:linear-gradient(135deg,#0f172a,#1e3a8a);color:#fff;border-radius:24px;padding:44px;box-shadow:0 16px 40px rgba(15,23,42,.18)}
+    .badge{display:inline-block;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.14);font-size:12px;margin-bottom:14px}
+    h1{margin:0 0 12px;font-size:44px;line-height:1.08} .lead{font-size:20px;color:#dbeafe;max-width:860px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px}.stat{background:rgba(255,255,255,.09);padding:18px;border-radius:16px}.stat b{display:block;font-size:28px;color:#93c5fd}.stat span{font-size:13px;color:#e2e8f0}
+    .section{margin-top:26px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:28px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+    .section h2{margin:0 0 10px;font-size:28px}.section p{color:var(--sub)}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+    .card{border:1px solid var(--line);border-radius:16px;padding:18px;background:#fff}.card h3{margin:0 0 8px;font-size:18px}.icon{width:42px;height:42px;border-radius:12px;background:#dbeafe;display:flex;align-items:center;justify-content:center;margin-bottom:10px;font-size:20px}
+    table{width:100%;border-collapse:collapse;margin-top:10px} th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top} th{background:#f8fafc}
+    .flow{background:#f8fafc;border:1px solid var(--line);border-radius:16px;padding:18px;font-family:ui-monospace,Menlo,monospace;white-space:pre-wrap}
+    .shots{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.shot{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}.shot img{width:100%;display:block}.shot .cap{padding:12px;font-size:14px;color:var(--sub)}
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.kpi .item{border-radius:16px;padding:18px;background:linear-gradient(180deg,#eff6ff,#fff);border:1px solid #bfdbfe}.kpi b{display:block;font-size:18px;color:var(--blue2);margin-bottom:6px}
+    .footer{margin:22px 0 8px;color:#64748b;font-size:13px}
+    @media (max-width: 960px){.cards,.shots,.kpi,.stats,.grid{grid-template-columns:1fr}.hero{padding:28px}h1{font-size:32px}}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="hero">
+    <section class="hero">
+      <div class="badge">Enterprise AI Orchestration</div>
       <h1>Multi Custom Agent Service</h1>
-      <div>한 번의 질문으로, 조직의 전문가들이 협업 답변합니다.</div>
-    </div>
-    <div class="sub">엔터프라이즈 멀티 에이전트 RAG 플랫폼 · SSO 권한 제어 · 계층 위임 · 실시간 스트리밍</div>
+      <div class="lead">사내 문서와 조직 구조를 반영해, 전문 챗봇들이 협업 답변하는 엔터프라이즈 AI 플랫폼</div>
+      <div class="stats">
+        <div class="stat"><b>Parent → Child</b><span>질문 성격에 따라 계층형 위임</span></div>
+        <div class="stat"><b>Knox ID</b><span>사용자-챗봇 권한 통제</span></div>
+        <div class="stat"><b>JSON 운영</b><span>신규 챗봇 추가/수정이 빠름</span></div>
+      </div>
+    </section>
 
-    <div style="margin-bottom:12px;">
-      <span class="badge">멀티 챗봇</span>
-      <span class="badge">계층 위임</span>
-      <span class="badge">RAG</span>
-      <span class="badge">권한 제어</span>
-      <span class="badge">관리자 패널</span>
-    </div>
+    <section class="section">
+      <h2>왜 필요한가</h2>
+      <div class="grid">
+        <div>
+          <p>문제는 문서의 부재가 아니라 <b>분산과 연결 부재</b>다. 정보는 여러 시스템과 담당자에게 흩어져 있고, 질문은 반복되며, 답변은 일관되지 않다.</p>
+        </div>
+        <div>
+          <table>
+            <tr><th>현업 문제</th><th>플랫폼 접근</th></tr>
+            <tr><td>전문가 병목</td><td>전문 Child 챗봇으로 역할 분산</td></tr>
+            <tr><td>정보 사일로</td><td>Parent가 관련 도메인을 연결</td></tr>
+            <tr><td>운영 복잡도</td><td>JSON + 관리자 UI로 구조 관리</td></tr>
+            <tr><td>보안 우려</td><td>권한 없는 챗봇 접근 차단</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
 
-    <div class="grid">
-      <div class="card">
-        <h3>핵심 기능</h3>
-        <ul>
-          <li>챗봇별 모델/DB/프롬프트 독립 운영</li>
-          <li>Parent→Child 위임 및 응답 종합</li>
-          <li>SSE 실시간 응답 스트리밍</li>
-          <li>사용자-챗봇 권한 제어</li>
-        </ul>
+    <section class="section">
+      <h2>핵심 가치</h2>
+      <div class="cards">
+        <div class="card"><div class="icon">🧭</div><h3>정확한 라우팅</h3><p>Parent가 질문을 해석하고 적절한 Child를 선택하거나 직접 답변한다.</p></div>
+        <div class="card"><div class="icon">🔐</div><h3>권한 기반 운영</h3><p>Knox ID와 사용자-챗봇 권한 모델을 통해 안전하게 운영한다.</p></div>
+        <div class="card"><div class="icon">🧩</div><h3>구조적 확장</h3><p>팀/프로젝트별 챗봇을 Parent-Child 계층으로 확장할 수 있다.</p></div>
+        <div class="card"><div class="icon">⚙️</div><h3>운영 가시성</h3><p>위임 경로, 후보 점수, 출처를 확인하며 정책을 조정할 수 있다.</p></div>
       </div>
-      <div class="card">
-        <h3>사용 방법</h3>
-        <ul>
-          <li>챗봇 선택 후 질문 입력</li>
-          <li>실시간 답변 확인</li>
-          <li>필요 시 후속 질문으로 대화 유지</li>
-          <li>관리자 화면에서 챗봇/권한 운영</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>도입 효과</h3>
-        <ul>
-          <li>답변 리드타임 단축</li>
-          <li>팀 지식 사일로 해소</li>
-          <li>운영 자동화/유지보수 단순화</li>
-          <li>보안/거버넌스 강화</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>발표용 데모 포인트</h3>
-        <ul>
-          <li>Parent 직접 응답 시나리오</li>
-          <li>Child 협업 종합 시나리오</li>
-          <li>권한 제한/오류 메시지 시나리오</li>
-          <li>위임 후보 점수 가시화</li>
-        </ul>
-      </div>
-    </div>
+    </section>
 
-    <div class="footer">자세한 문서: docs/PROMOTION_KIT_2026-04.md</div>
+    <section class="section">
+      <h2>동작 구조</h2>
+      <div class="flow">[사용자 질문]
+      ↓
+[Parent 챗봇]
+      ├─ 직접 답변 가능 → 바로 응답
+      └─ 전문 영역 필요 → [Child 후보 선택]
+                          ↓
+                     [문서 검색/RAG]
+                          ↓
+                 [필요 시 다중 응답 종합]
+                          ↓
+                    [최종 답변 + 출처]</div>
+    </section>
+
+    <section class="section">
+      <h2>실제 구동 화면</h2>
+      <div class="shots">
+        <div class="shot"><img src="assets/01-chat-ui.png" alt="chat ui"><div class="cap"><b>사용자 채팅 UI</b><br>실시간 스트리밍 응답, 챗봇 선택, 세션 기반 대화</div></div>
+        <div class="shot"><img src="assets/02-admin-ui.png" alt="admin ui"><div class="cap"><b>관리자 패널</b><br>챗봇 생성/수정/정책 관리</div></div>
+        <div class="shot"><img src="assets/03-admin-hierarchy.png" alt="hierarchy ui"><div class="cap"><b>계층 구조 관리</b><br>Parent-Child 위임 구조 시각화</div></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>대표 사용 시나리오</h2>
+      <table>
+        <tr><th>시나리오</th><th>설명</th></tr>
+        <tr><td>공통 허브형</td><td>Parent가 여러 팀 Child를 연결해 사용자가 질문 대상을 몰라도 응답 가능</td></tr>
+        <tr><td>전문 팀형</td><td>HR, DevOps, RTL 등 도메인별 전문 챗봇으로 반복 질의 자동화</td></tr>
+        <tr><td>프로젝트형</td><td>프로젝트 Parent 아래 모듈/업무별 Child를 두어 운영 정보 구조화</td></tr>
+        <tr><td>권한 통제형</td><td>사용자별 챗봇 접근 허용/차단으로 안전한 내부 서비스 운영</td></tr>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>파일럿에서 확인할 KPI</h2>
+      <div class="kpi">
+        <div class="item"><b>반복 문의 감소</b><span>자주 묻는 질문 자동 응답 비율</span></div>
+        <div class="item"><b>응답 시간 단축</b><span>질문 → 답변까지 걸리는 시간</span></div>
+        <div class="item"><b>사용자 만족도</b><span>도움됨 평가 / 재사용률</span></div>
+        <div class="item"><b>운영 안정성</b><span>권한 오류, 오선택, 위임 정책 개선 건수</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>추천 도입 방식</h2>
+      <table>
+        <tr><th>단계</th><th>권장 내용</th></tr>
+        <tr><td>1단계</td><td>FAQ가 많고 문서가 정리된 팀을 파일럿 대상으로 선정</td></tr>
+        <tr><td>2단계</td><td>Parent/Child 구조와 권한 정책을 설계</td></tr>
+        <tr><td>3단계</td><td>데모/시범 운영으로 위임 품질과 운영성 확인</td></tr>
+        <tr><td>4단계</td><td>성과 확인 후 팀 단위로 확장</td></tr>
+      </table>
+      <div class="footer">참고: 실제 정량 수치는 조직별 파일럿 결과로 산정하는 방식이 가장 안전하다.</div>
+    </section>
   </div>
 </body>
 </html>
