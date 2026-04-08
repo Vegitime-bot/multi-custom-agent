@@ -184,6 +184,52 @@ class TestCombineContexts:
         assert result.index("First") < result.index("Second")
 
 
+class TestExecuteDelegationDecision:
+    """execute() 단계에서 실제 위임 호출 여부 검증"""
+
+    @pytest.fixture
+    def parent_executor(self):
+        mock_chatbot = Mock(spec=ChatbotDef)
+        mock_chatbot.id = "parent-bot"
+        mock_chatbot.name = "Parent Bot"
+        mock_chatbot.level = 1
+        mock_chatbot.sub_chatbots = [
+            SubChatbotRef(id='sub-1', level=2, default_role=ExecutionRole.AGENT),
+        ]
+        mock_chatbot.parent_id = None
+        mock_chatbot.policy = {"delegation_threshold": 70}
+        mock_chatbot.retrieval = Mock()
+        mock_chatbot.retrieval.db_ids = ["db_parent"]
+        mock_chatbot.retrieval.k = 5
+        mock_chatbot.retrieval.filter_metadata = None
+
+        mock_ingestion = Mock()
+        mock_memory = Mock()
+
+        return HierarchicalAgentExecutor(
+            chatbot_def=mock_chatbot,
+            ingestion_client=mock_ingestion,
+            memory_manager=mock_memory,
+        )
+
+    def test_execute_parent_answerable_question_should_not_delegate(self, parent_executor):
+        """TC-EXEC-001: parent가 답변 가능(고신뢰)하면 하위로 위임하지 않아야 함"""
+        # parent가 답할 수 있는 상황 강제
+        parent_executor._retrieve = Mock(return_value="PDDI 프로젝트 관련 정책/현황 문서")
+        parent_executor._calculate_confidence = Mock(return_value=90)
+
+        # 실행 경로 추적
+        parent_executor._respond_directly = Mock(return_value=iter(["parent answer"]))
+        parent_executor._delegate = Mock(return_value=iter(["delegated answer"]))
+
+        out = list(parent_executor.execute("PDDI 프로젝트 현황 알려줘", "sess-1"))
+
+        # 기대: 직접 응답 1회, 위임 0회
+        parent_executor._respond_directly.assert_called_once()
+        parent_executor._delegate.assert_not_called()
+        assert out == ["parent answer"]
+
+
 class TestDelegationPathLogic:
     """Integration tests for delegation path priority"""
     
