@@ -70,8 +70,14 @@ class IngestionClient:
             resp.raise_for_status()
             data = resp.json()
             return data.get("results", data if isinstance(data, list) else [])
+        except requests.exceptions.HTTPError as e:
+            # HTTP 에러 (403 Forbidden 등)
+            status = e.response.status_code if e.response else "unknown"
+            text = e.response.text[:200] if e.response and e.response.text else ""
+            print(f"[IngestionClient] search HTTP {status} 에러 (index_names={db_ids}): {text}")
+            return []
         except Exception as e:
-            print(f"[IngestionClient] search 오류 (index_names={db_ids}): {e}")
+            print(f"[IngestionClient] search 오류 (index_names={db_ids}): {type(e).__name__}: {e}")
             return []
 
     def search_single(

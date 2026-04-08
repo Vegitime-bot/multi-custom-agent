@@ -182,10 +182,30 @@ def check_mode_permission(permissions: dict, chatbot_id: str, mode: str) -> bool
     return mode in allowed
 
 
-# ── 사용자 DB 스코프 (임시: 모든 DB 허용) ──
+# ── 사용자 DB 스코프 ──
+# TODO: 실제 DB에서 사용자-DB 권한 조회하도록 변경
+MOCK_USER_DB_SCOPE = {
+    "user-001": {"db_001", "db_002", "db_003", "db_004", "db_005"},  # 관리자: 전체
+    "user-002": {"db_001"},  # 인사팀: 제한된 권한
+    "user-003": {"db_002", "db_003"},  # 기술팀: 일부 권한
+    "guest": {"db_001"},  # 게스트: 최소 권한
+}
+
 def get_user_db_scope(user: dict) -> set[str]:
+    """
+    사용자가 접근 가능한 DB 목록 조회
+    - 실제 DB 연동 시 PermissionRepository 확장 필요
+    """
+    knox_id = user.get("knox_id", "unknown")
+    
     if settings.USE_MOCK_AUTH:
-        return {"db_001", "db_002", "db_003", "db_004", "db_005"}
+        scope = MOCK_USER_DB_SCOPE.get(knox_id, set())
+        logger.info(f"[DB Scope] 사용자 {knox_id}의 접근 가능 DB: {scope}")
+        return scope
+    
+    # TODO: 실제 DB에서 사용자-DB 권한 조회
+    # repo = get_permission_repository(use_mock=False)
+    # return repo.get_user_db_scope(knox_id)
     return set()
 
 
@@ -337,10 +357,27 @@ async def chat(
 
     # 4. DB 스코프 계산
     user_db_scope = get_user_db_scope(get_current_user(request))
+    requested_db_ids = chatbot_def.retrieval.db_ids
     authorized_db_ids = [
-        db_id for db_id in chatbot_def.retrieval.db_ids
+        db_id for db_id in requested_db_ids
         if db_id in user_db_scope
     ]
+    
+    # DB 접근 권한 체크
+    if not authorized_db_ids:
+        missing_dbs = set(requested_db_ids) - user_db_scope
+        logger.error(f"[Chat {request_id}] 사용자 {session.user_knox_id}의 DB 접근 권한 없음: {missing_dbs}")
+        raise HTTPException(
+            status_code=403,
+            detail=f"해당 챗봇에 접근할 수 있는 데이터베이스 권한이 없습니다. 요청: {requested_db_ids}, 허용: {user_db_scope}"
+        )
+    
+    # 일부 DB만 접근 가능한 경우 경고 로그
+    if set(authorized_db_ids) != set(requested_db_ids):
+        allowed = set(authorized_db_ids)
+        denied = set(requested_db_ids) - allowed
+        logger.warning(f"[Chat {request_id}] 사용자 {session.user_knox_id}의 제한된 DB 접근 - 허용: {allowed}, 거부: {denied}")
+    
     logger.info(f"[Chat {request_id}] authorized_db_ids: {authorized_db_ids}")
 
     # 5. 권한 확인 (Phase 4: Mode 기반 권한)
@@ -520,12 +557,31 @@ async def chat_tool(
     user = get_current_user(request)
     permissions = get_user_permissions(user)
     if not check_chatbot_access(permissions, chatbot_id):
-        raise HTTPException(status_code=403, detail=f"해당 챗봗에 접근할 권한이 없습니다: {chatbot_id}")
+        raise HTTPException(status_code=403, detail=f"해당 챗봇에 접근할 권한이 없습니다: {chatbot_id}")
     if not check_mode_permission(permissions, chatbot_id, "tool"):
         raise HTTPException(status_code=403, detail=f"Tool 모드 사용 권한이 없습니다")
+    
+    # 3. DB 스코프 계산
+    user_db_scope = get_user_db_scope(user)
+    requested_db_ids = chatbot_def.retrieval.db_ids
+    authorized_db_ids = [
+        db_id for db_id in requested_db_ids
+        if db_id in user_db_scope
+    ]
+    
+    # DB 접근 권한 체크
+    if not authorized_db_ids:
+        missing_dbs = set(requested_db_ids) - user_db_scope
+        logger.error(f"[Tool {request_id}] 사용자 {user['knox_id']}의 DB 접근 권한 없음: {missing_dbs}")
+        raise HTTPException(
+            status_code=403,
+            detail=f"해당 챗봇에 접근할 수 있는 데이터베이스 권한이 없습니다."
+        )
+    
     logger.info(f"[Tool {request_id}] 권한 확인 완료")
+    logger.info(f"[Tool {request_id}] authorized_db_ids: {authorized_db_ids}")
 
-    # 3. Tool Executor 생성
+    # 4. Tool Executor 생성
     executor = ToolExecutor(chatbot_def, ingestion_client)
     logger.info(f"[Tool {request_id}] ToolExecutor 생성")
 
@@ -585,12 +641,31 @@ async def chat_agent(
     user = get_current_user(request)
     permissions = get_user_permissions(user)
     if not check_chatbot_access(permissions, chatbot_id):
-        raise HTTPException(status_code=403, detail=f"해당 챗봗에 접근할 권한이 없습니다: {chatbot_id}")
+        raise HTTPException(status_code=403, detail=f"해당 챗봇에 접근할 권한이 없습니다: {chatbot_id}")
     if not check_mode_permission(permissions, chatbot_id, "agent"):
         raise HTTPException(status_code=403, detail=f"Agent 모드 사용 권한이 없습니다")
+    
+    # 3. DB 스코프 계산
+    user_db_scope = get_user_db_scope(user)
+    requested_db_ids = chatbot_def.retrieval.db_ids
+    authorized_db_ids = [
+        db_id for db_id in requested_db_ids
+        if db_id in user_db_scope
+    ]
+    
+    # DB 접근 권한 체크
+    if not authorized_db_ids:
+        missing_dbs = set(requested_db_ids) - user_db_scope
+        logger.error(f"[Agent {request_id}] 사용자 {user['knox_id']}의 DB 접근 권한 없음: {missing_dbs}")
+        raise HTTPException(
+            status_code=403,
+            detail=f"해당 챗봇에 접근할 수 있는 데이터베이스 권한이 없습니다."
+        )
+    
     logger.info(f"[Agent {request_id}] 권한 확인 완료")
+    logger.info(f"[Agent {request_id}] authorized_db_ids: {authorized_db_ids}")
 
-    # 3. 세션 확인/생성
+    # 4. 세션 확인/생성
     session = session_mgr.get_or_create(
         chatbot_id=chatbot_id,
         user_knox_id=user["knox_id"],
