@@ -501,19 +501,25 @@ class HierarchicalAgentExecutor(AgentExecutor):
             })
 
         scores.sort(key=lambda x: x['hybrid'], reverse=True)
-        filtered = [s for s in scores if s['hybrid'] >= self.hybrid_score_threshold]
 
-        # Fail-safe: if no candidates pass hybrid threshold, include best keyword match
-        # if keyword_score >= 0.3 (at least 1 keyword matched)
-        if not filtered:
-            keyword_matches = [s for s in scores if s['keyword'] >= 0.3]
-            if keyword_matches:
-                keyword_matches.sort(key=lambda x: (x['keyword'], x['hybrid']), reverse=True)
-                filtered = keyword_matches[:1]
-            elif scores:
-                filtered = scores[:1]
+        # multi_sub_execution이면 전체 하위 챗봇 종합 우선
+        # (사용자 요청: a/b/c/d 모두 조회 후 종합)
+        if self.multi_sub_execution:
+            selected = scores
+        else:
+            filtered = [s for s in scores if s['hybrid'] >= self.hybrid_score_threshold]
 
-        selected = filtered[:self.max_parallel_subs]
+            # Fail-safe: if no candidates pass hybrid threshold, include best keyword match
+            # if keyword_score >= 0.3 (at least 1 keyword matched)
+            if not filtered:
+                keyword_matches = [s for s in scores if s['keyword'] >= 0.3]
+                if keyword_matches:
+                    keyword_matches.sort(key=lambda x: (x['keyword'], x['hybrid']), reverse=True)
+                    filtered = keyword_matches[:1]
+                elif scores:
+                    filtered = scores[:1]
+
+            selected = filtered[:self.max_parallel_subs]
 
         return [
             (s['chatbot'], f"(kw:{s['keyword']}, emb:{s['embedding']}, hybrid:{s['hybrid']})", {
