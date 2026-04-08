@@ -49,6 +49,11 @@ class Settings:
     INGESTION_BASE_URL: str = os.getenv("INGESTION_BASE_URL", "http://localhost:8001")
     INGESTION_API_KEY: str = os.getenv("INGESTION_API_KEY", "")
 
+    # ── Delegation Routing ────────────────────────────────────────
+    # best: 가장 적합한 하위 Agent만 선택
+    # all: 모든 하위 Agent 조회 후 종합
+    SUB_ROUTING_MODE: str = os.getenv("SUB_ROUTING_MODE", "best").lower()
+
     # ── SSL ──────────────────────────────────────────────────────
     SSL_VERIFY: bool = os.getenv("SSL_VERIFY", "false").lower() == "true"
 

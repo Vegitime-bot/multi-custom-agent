@@ -24,6 +24,7 @@ from backend.managers.memory_manager import MemoryManager
 from backend.retrieval.ingestion_client import IngestionClient
 from backend.services.embedding_service import get_embedding_service
 from backend.llm.client import get_llm_client
+from backend.config import settings
 
 # 로거 설정
 logger = logging.getLogger(__name__)
@@ -121,6 +122,9 @@ class HierarchicalAgentExecutor(AgentExecutor):
         self.enable_parent_delegation = chatbot_def.policy.get(
             'enable_parent_delegation', True
         )  # 상위 위임 활성화 여부
+        self.sub_routing_mode = chatbot_def.policy.get(
+            'sub_routing_mode', getattr(settings, 'SUB_ROUTING_MODE', 'best')
+        ).lower()  # best | all
 
         self._embedding_service = get_embedding_service()
 
@@ -277,7 +281,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
         yield f"({self.chatbot_def.name} 신뢰도: {confidence}% → 하위 Agent 위임)\n\n"
         yield f"---\n📡 **전문가 챗봇을 호출합니다...**\n\n"
 
-        if self.multi_sub_execution:
+        use_multi = self.multi_sub_execution or self.sub_routing_mode == 'all'
+        if use_multi:
             yield from self._delegate_to_multi_subs(message, session_id, context, confidence)
         else:
             yield from self._delegate_to_single_sub(message, session_id, context, confidence)
@@ -502,9 +507,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         scores.sort(key=lambda x: x['hybrid'], reverse=True)
 
-        # multi_sub_execution이면 전체 하위 챗봇 종합 우선
-        # (사용자 요청: a/b/c/d 모두 조회 후 종합)
-        if self.multi_sub_execution:
+        if self.sub_routing_mode == 'all':
             selected = scores
         else:
             filtered = [s for s in scores if s['hybrid'] >= self.hybrid_score_threshold]
