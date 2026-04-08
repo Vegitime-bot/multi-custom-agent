@@ -358,47 +358,30 @@ async def chat(
     logger.info(f"[Chat {request_id}] 실행 mode: {mode.value}")
 
     # 4. DB 스코프 계산
-    user_db_scope = get_user_db_scope(get_current_user(request))
+    # 챗봇 접근 권한이 있으면 해당 챗봇의 모든 DB 허용
     requested_db_ids = chatbot_def.retrieval.db_ids
-    authorized_db_ids = [
-        db_id for db_id in requested_db_ids
-        if db_id in user_db_scope
-    ]
-    
-    # DB 접근 권한 체크
-    if not authorized_db_ids:
-        missing_dbs = set(requested_db_ids) - user_db_scope
-        logger.error(f"[Chat {request_id}] 사용자 {session.user_knox_id}의 DB 접근 권한 없음: {missing_dbs}")
-        raise HTTPException(
-            status_code=403,
-            detail=f"해당 챗봇에 접근할 수 있는 데이터베이스 권한이 없습니다. 요청: {requested_db_ids}, 허용: {user_db_scope}"
-        )
-    
-    # 일부 DB만 접근 가능한 경우 경고 로그
-    if set(authorized_db_ids) != set(requested_db_ids):
-        allowed = set(authorized_db_ids)
-        denied = set(requested_db_ids) - allowed
-        logger.warning(f"[Chat {request_id}] 사용자 {session.user_knox_id}의 제한된 DB 접근 - 허용: {allowed}, 거부: {denied}")
-    
-    logger.info(f"[Chat {request_id}] authorized_db_ids: {authorized_db_ids}")
-
-    # 5. 권한 확인 (Phase 4: Mode 기반 권한)
     user = get_current_user(request)
     permissions = get_user_permissions(user)
     
-    # 챗봗 접근 권한 확인
-    if not check_chatbot_access(permissions, body.chatbot_id):
-        logger.error(f"[Chat {request_id}] 챗봗 접근 권한 없음: {body.chatbot_id}")
-        raise HTTPException(status_code=403, detail=f"해당 챗봗에 접근할 권한이 없습니다: {body.chatbot_id}")
-    
-    # Mode 사용 권한 확인
+    if check_chatbot_access(permissions, body.chatbot_id):
+        authorized_db_ids = list(requested_db_ids)
+        logger.info(f"[Chat {request_id}] 챗봇 접근 권한으로 DB 허용: {authorized_db_ids}")
+    else:
+        # 챗봇 접근 권한 없음
+        logger.error(f"[Chat {request_id}] 사용자 {user['knox_id']}의 챗봇 접근 권한 없음: {body.chatbot_id}")
+        raise HTTPException(
+            status_code=403,
+            detail=f"해당 챗봇에 접근할 권한이 없습니다: {body.chatbot_id}"
+        )
+
+    # 5. Mode 권한 확인
     if not check_mode_permission(permissions, body.chatbot_id, mode.value):
         logger.error(f"[Chat {request_id}] mode 권한 없음: {mode.value}")
         raise HTTPException(
-            status_code=403, 
+            status_code=403,
             detail=f"{mode.value} 모드 사용 권한이 없습니다. 허용된 모드: {permissions.get(body.chatbot_id, {}).get('allowed_modes', [])}"
         )
-    
+
     logger.info(f"[Chat {request_id}] 권한 확인 완료")
 
     # 6. Executor 생성 (상위 챗봇 체크)
