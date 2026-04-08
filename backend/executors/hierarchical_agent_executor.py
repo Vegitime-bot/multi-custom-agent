@@ -222,6 +222,12 @@ class HierarchicalAgentExecutor(AgentExecutor):
         else:
             yield from self._delegate_to_parent(message, session_id, context, confidence)
 
+    def _source_note(self, chatbot: ChatbotDef) -> str:
+        """응답 출처 표기 문자열 생성"""
+        db_ids = getattr(chatbot.retrieval, 'db_ids', []) if hasattr(chatbot, 'retrieval') else []
+        db_text = ', '.join(db_ids) if db_ids else '(없음)'
+        return f"출처: {chatbot.name} (id={chatbot.id}, level={chatbot.level}, db={db_text})"
+
     # ====================================================================
     # Phase 2a/2b: 직접 응답 / 불확실 응답
     # ====================================================================
@@ -234,7 +240,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """Confidence 충분 - 자체 답변"""
-        yield f"📢 **[{self.chatbot_def.name}]** (신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n\n"
+        yield f"📢 **[{self.chatbot_def.name}]** (신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n"
+        yield f"🧾 {self._source_note(self.chatbot_def)}\n\n"
         yield from self._execute_with_context(message, session_id, context)
 
     def _respond_uncertain(
@@ -245,7 +252,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """위임 대상 없음 - 최선의 답변 제공 (Fallback)"""
-        yield f"📢 **[{self.chatbot_def.name}]** (최종 답변 / 신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n\n"
+        yield f"📢 **[{self.chatbot_def.name}]** (최종 답변 / 신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n"
+        yield f"🧾 {self._source_note(self.chatbot_def)}\n\n"
         if self.accumulated_context:
             yield "*(하위 Agent들의 컨텍스트를 종합하여 답변합니다)*\n\n"
         yield from self._execute_with_context(message, session_id, context)
@@ -613,7 +621,9 @@ class HierarchicalAgentExecutor(AgentExecutor):
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
-        return "".join(sub_executor.execute(enhanced_message, session_id))
+        sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
+        source_header = f"🧾 {self._source_note(sub_chatbot)}\n\n"
+        return source_header + sub_answer
 
     def _delegate_to_sub(
         self,
@@ -630,6 +640,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
+        yield f"🧾 {self._source_note(sub_chatbot)}\n\n"
         yield from sub_executor.execute(enhanced_message, session_id)
 
     # ====================================================================
