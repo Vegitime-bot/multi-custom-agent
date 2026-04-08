@@ -39,7 +39,6 @@ except ImportError:
         LLM_DEFAULT_MAX_TOKENS: int = int(os.getenv("LLM_DEFAULT_MAX_TOKENS", "1024"))
         INGESTION_BASE_URL: str = os.getenv("INGESTION_BASE_URL", "http://localhost:8001")
         INGESTION_API_KEY: str = os.getenv("INGESTION_API_KEY", "")
-        SUB_ROUTING_MODE: str = os.getenv("SUB_ROUTING_MODE", "best").lower()
         SSL_VERIFY: bool = os.getenv("SSL_VERIFY", "false").lower() == "true"
         CHATBOTS_DIR: Path = Path(__file__).parent.parent / "chatbots"
         HOST: str = os.getenv("HOST", "0.0.0.0")
