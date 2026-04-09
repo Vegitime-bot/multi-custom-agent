@@ -322,6 +322,8 @@ function collapseAllNodes() {
 }
 
 // ===== 사용자 권한 뷰 =====
+let currentUserPermissions = [];
+
 async function loadUsers() {
     const container = document.getElementById('permissionsContainer');
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -331,54 +333,158 @@ async function loadUsers() {
         const response = await fetch('/api/permissions/admin/stats');
         const stats = await response.json();
         
-        const userListHtml = Object.entries(stats.user_stats).map(([knoxId, data]) => `
-            <div class="user-permission-card">
-                <div class="user-info">
-                    <h4>${knoxId}</h4>
-                    <div class="user-stats">
-                        <span class="badge badge-success">접근 가능 ${data.accessible}개</span>
-                        <span class="badge badge-secondary">전체 ${data.total}개</span>
-                    </div>
-                </div>
-                <div class="user-actions">
-                    <button class="btn btn-sm btn-secondary" onclick="viewUserPermissions('${knoxId}')">상세 보기</button>
-                </div>
-            </div>
-        `).join('');
+        // Store user data globally for filtering
+        window.userPermissionsData = stats.user_stats;
         
-        container.innerHTML = `
-            <div class="users-list">
-                ${userListHtml}
-            </div>
-        `;
+        renderUsersList(stats.user_stats);
     } catch (error) {
         container.innerHTML = `<div class="error">로드 실패: ${error.message}</div>`;
     }
 }
 
+function renderUsersList(userStats) {
+    const container = document.getElementById('permissionsContainer');
+    
+    if (!userStats || Object.keys(userStats).length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">👥</div>
+                <h3>사용자 권한 정보 없음</h3>
+                <p>권한을 추가하여 사용자를 관리하세요.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const userListHtml = Object.entries(userStats).map(([knoxId, data]) => `
+        <div class="user-permission-card" data-knox-id="${knoxId}">
+            <div class="user-info">
+                <h4>${knoxId}</h4>
+                <div class="user-stats">
+                    <span class="badge badge-success">접근 가능 ${data.accessible}개</span>
+                    <span class="badge badge-secondary">전체 ${data.total}개</span>
+                </div>
+            </div>
+            <div class="user-actions">
+                <button class="btn btn-sm btn-secondary" onclick="viewUserPermissions('${knoxId}')">상세 보기</button>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = `
+        <div class="users-list">
+            ${userListHtml}
+        </div>
+    `;
+}
+
+function filterUsers() {
+    const searchTerm = document.getElementById('userSearchInput')?.value.toLowerCase() || '';
+    const userCards = document.querySelectorAll('.user-permission-card');
+    
+    userCards.forEach(card => {
+        const knoxId = card.getAttribute('data-knox-id') || '';
+        if (knoxId.toLowerCase().includes(searchTerm)) {
+            card.style.display = 'flex';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
 async function viewUserPermissions(knoxId) {
     try {
         const response = await fetch(`/api/permissions/users/${knoxId}`);
-        const data = await response.json();
+        if (!response.ok) throw new Error('조회 실패');
         
+        const data = await response.json();
+        currentUserPermissions = data.permissions;
+        
+        // Build modal content
         const permsHtml = data.permissions.map(p => `
             <div class="permission-item ${p.can_access ? 'granted' : 'denied'}">
-                <span class="chatbot-name">${p.chatbot_id}</span>
-                <span class="status-badge">${p.can_access ? '✅ 허용' : '❌ 차단'}</span>
+                <div class="permission-info">
+                    <span class="chatbot-name">${p.chatbot_id}</span>
+                    <span class="permission-date">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '-'}</span>
+                </div>
+                <div class="permission-actions">
+                    <label class="toggle-switch-small">
+                        <input type="checkbox" ${p.can_access ? 'checked' : ''} 
+                               onchange="updateUserPermission('${knoxId}', '${p.chatbot_id}', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <button class="btn-icon btn-delete" onclick="deleteUserPermission('${knoxId}', '${p.chatbot_id}')" title="권한 삭제">🗑️</button>
+                </div>
             </div>
         `).join('');
         
-        // Show in modal or alert for now
         const content = `
-            <h3>${knoxId}의 권한</h3>
-            <p>접근 가능: ${data.accessible_count} / ${data.total}</p>
-            <div class="permissions-list">${permsHtml}</div>
+            <div class="user-detail-header">
+                <div class="user-profile">
+                    <span class="user-avatar">👤</span>
+                    <div class="user-info">
+                        <h4>${knoxId}</h4>
+                        <p>접근 가능: <strong>${data.accessible_count}</strong> / ${data.total}개 챗봇</p>
+                    </div>
+                </div>
+            </div>
+            <div class="permissions-detail-list">
+                ${permsHtml || '<p class="empty">설정된 권한이 없습니다.</p>'}
+            </div>
         `;
         
-        showToast(`${knoxId}: ${data.accessible_count}/${data.total}개 접근 가능`);
+        document.getElementById('userDetailTitle').textContent = `${knoxId} - 권한 상세`;
+        document.getElementById('userDetailContent').innerHTML = content;
+        document.getElementById('userDetailModal').classList.add('active');
+        
     } catch (error) {
-        showToast('권한 조회 실패', 'error');
+        console.error('Error loading user permissions:', error);
+        showToast('권한 조회 실패: ' + error.message, 'error');
     }
+}
+
+async function updateUserPermission(knoxId, chatbotId, canAccess) {
+    try {
+        const response = await fetch(`/api/permissions/${knoxId}/${chatbotId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ can_access: canAccess })
+        });
+        
+        if (!response.ok) throw new Error('수정 실패');
+        
+        showToast('권한이 수정되었습니다', 'success');
+        // Refresh user detail view
+        viewUserPermissions(knoxId);
+        // Refresh user list
+        loadUsers();
+    } catch (error) {
+        showToast('권한 수정 실패: ' + error.message, 'error');
+    }
+}
+
+async function deleteUserPermission(knoxId, chatbotId) {
+    if (!confirm(`정말로 ${chatbotId}에 대한 권한을 삭제하시겠습니까?`)) return;
+    
+    try {
+        const response = await fetch(`/api/permissions/${knoxId}/${chatbotId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('삭제 실패');
+        
+        showToast('권한이 삭제되었습니다', 'success');
+        // Refresh user detail view
+        viewUserPermissions(knoxId);
+        // Refresh user list
+        loadUsers();
+    } catch (error) {
+        showToast('권한 삭제 실패: ' + error.message, 'error');
+    }
+}
+
+function closeUserDetailModal() {
+    document.getElementById('userDetailModal').classList.remove('active');
 }
 
 // ===== 통계 대시보드 =====
@@ -566,16 +672,82 @@ async function openBulkPermissionModal() {
     }
 }
 
+// ===== 권한 추가 모달 =====
+async function openAddPermissionModal() {
+    document.getElementById('addPermissionModal').classList.add('active');
+    document.getElementById('addPermissionForm').reset();
+    
+    // 챗봘 목록 로드
+    const select = document.getElementById('addChatbotId');
+    select.innerHTML = '<option value="">챗봘을 선택하세요</option>';
+    
+    try {
+        const response = await fetch('/admin/api/chatbots');
+        const bots = await response.json();
+        
+        bots.forEach(bot => {
+            const option = document.createElement('option');
+            option.value = bot.id;
+            option.textContent = `${bot.name} (${bot.id})`;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error loading chatbots:', error);
+        select.innerHTML = '<option value="">챗봘 목록 로드 실패</option>';
+    }
+}
+
+function closeAddPermissionModal() {
+    document.getElementById('addPermissionModal').classList.remove('active');
+}
+
+async function saveAddPermission(event) {
+    event.preventDefault();
+    
+    const knoxId = document.getElementById('addUserId').value.trim();
+    const chatbotId = document.getElementById('addChatbotId').value;
+    const canAccess = document.getElementById('addCanAccess').checked;
+    
+    if (!knoxId || !chatbotId) {
+        showToast('사용자 ID와 챗봘을 모두 선택하세요', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/permissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                knox_id: knoxId,
+                chatbot_id: chatbotId,
+                can_access: canAccess
+            })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || '저장 실패');
+        }
+        
+        closeAddPermissionModal();
+        showToast('권한이 추가되었습니다', 'success');
+        // Refresh user list
+        loadUsers();
+    } catch (error) {
+        showToast('권한 추가 실패: ' + error.message, 'error');
+    }
+}
+
 function closeBulkPermissionModal() {
-    document.getElementById('bulkPermissionModal').classList.remove('active');
+    document.getElementById('bulkPermissionModal')?.classList.remove('active');
 }
 
 async function saveBulkPermissions(event) {
     event.preventDefault();
     
-    const knoxId = document.getElementById('bulkUserId').value;
+    const knoxId = document.getElementById('bulkUserId')?.value;
     const chatbotIds = Array.from(document.querySelectorAll('input[name="bulkChatbots"]:checked')).map(cb => cb.value);
-    const canAccess = document.getElementById('bulkAccessType').value === 'true';
+    const canAccess = document.getElementById('bulkAccessType')?.value === 'true';
     
     if (!chatbotIds.length) {
         showToast('최소 하나의 챗봘을 선택하세요', 'error');

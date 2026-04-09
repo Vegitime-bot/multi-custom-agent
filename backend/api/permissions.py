@@ -1,25 +1,23 @@
 """
 backend/api/permissions.py - 권한 관리 API
-사용자-챗봘 권한 CRUD API
+사용자-챗봇 권한 CRUD API
 """
 from __future__ import annotations
 from typing import List, Optional
-
-from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from backend.auth.mock_auth import get_current_user
 from backend.permissions.repository import (
     PermissionRepository,
     get_perm_repo,
+    get_permission_repository,
 )
-from backend.managers.chatbot_manager import ChatbotManager
-from backend.api.deps import get_chatbot_manager
+from backend.config import settings
 
 router = APIRouter(prefix="/api/permissions", tags=["permissions"])
 
 
-# ── 요청/응답 스키마 ───────────────────────────────────────────────
+# ── 요청/응답 모델 ─────────────────────────────────────────────────
 class PermissionCreate(BaseModel):
     knox_id: str
     chatbot_id: str
@@ -35,85 +33,108 @@ class PermissionResponse(BaseModel):
     knox_id: str
     chatbot_id: str
     can_access: bool
-    created_at: Optional[str]
-    updated_at: Optional[str]
+    created_at: Optional[str] = None
 
 
 class UserPermissionsResponse(BaseModel):
     knox_id: str
     permissions: List[PermissionResponse]
-    total: int
     accessible_count: int
-
-
-class ChatbotUsersResponse(BaseModel):
-    chatbot_id: str
-    users: List[dict]
     total: int
+
+
+class BulkPermissionRequest(BaseModel):
+    knox_id: str
+    chatbot_ids: List[str]
+    can_access: bool
+
+
+class BulkPermissionResponse(BaseModel):
+    total: int
+    success_count: int
+    failed_count: int
+    errors: List[str] = []
+
+
+class PermissionStats(BaseModel):
+    total_permissions: int
+    unique_users: int
+    unique_chatbots: int
+    user_stats: dict
 
 
 # ── API 엔드포인트 ────────────────────────────────────────────────
+
+@router.get("", response_model=List[PermissionResponse])
+async def get_all_permissions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    knox_id: Optional[str] = Query(None, description="사용자 ID로 필터링"),
+    chatbot_id: Optional[str] = Query(None, description="챗봇 ID로 필터링"),
+    repo: PermissionRepository = Depends(get_perm_repo),
+):
+    """전체 권한 목록 조회 (페이징 지원)"""
+    permissions = repo.get_all_permissions(skip=skip, limit=limit)
+    
+    # 필터링 적용
+    if knox_id:
+        permissions = [p for p in permissions if p.get("knox_id") == knox_id]
+    if chatbot_id:
+        permissions = [p for p in permissions if p.get("chatbot_id") == chatbot_id]
+    
+    return [PermissionResponse(**p) for p in permissions]
+
+
 @router.get("/users/{knox_id}", response_model=UserPermissionsResponse)
 async def get_user_permissions(
     knox_id: str,
     repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
 ):
-    """
-    특정 사용자의 모든 챗봘 권한 조회
-    - 자신의 권한만 조회 가능 (관리자 제외)
-    """
-    # TODO: 관리자 권한 체크 추가
-    # if current_user["knox_id"] != knox_id and not is_admin(current_user):
-    #     raise HTTPException(403, "권한이 없습니다")
-
-    perms = repo.get_user_permissions(knox_id)
-    accessible = [p for p in perms if p["can_access"]]
-
+    """특정 사용자의 모든 권한 조회"""
+    permissions = repo.get_user_permissions(knox_id)
+    
+    accessible = sum(1 for p in permissions if p.get("can_access"))
+    
     return UserPermissionsResponse(
         knox_id=knox_id,
-        permissions=[PermissionResponse(**p) for p in perms],
-        total=len(perms),
-        accessible_count=len(accessible),
+        permissions=[PermissionResponse(**p) for p in permissions],
+        accessible_count=accessible,
+        total=len(permissions),
     )
 
 
-@router.get("/check/{chatbot_id}")
-async def check_permission(
+@router.get("/chatbots/{chatbot_id}/users", response_model=List[dict])
+async def get_chatbot_users(
     chatbot_id: str,
     repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
 ):
-    """현재 사용자의 특정 챗봘 접근 권한 확인"""
-    has_access = repo.check_access(current_user["knox_id"], chatbot_id)
-
-    return {
-        "knox_id": current_user["knox_id"],
-        "chatbot_id": chatbot_id,
-        "has_access": has_access,
-    }
+    """특정 챗봇에 접근 가능한 사용자 목록 조회"""
+    users = repo.get_chatbot_users(chatbot_id)
+    return users
 
 
-@router.post("/", response_model=PermissionResponse, status_code=status.HTTP_201_CREATED)
-async def grant_permission(
+@router.post("", response_model=PermissionResponse)
+async def create_permission(
     data: PermissionCreate,
     repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
 ):
-    """권한 부여 (새로 생성 또는 수정)"""
-    # TODO: 관리자 권한 체크
-
-    success = repo.grant_access(data.knox_id, data.chatbot_id, data.can_access)
+    """새로운 권한 추가 (사용자-챗봇 권한 부여)"""
+    success = repo.grant_access(
+        knox_id=data.knox_id,
+        chatbot_id=data.chatbot_id,
+        can_access=data.can_access,
+    )
+    
     if not success:
-        raise HTTPException(500, "권한 설정에 실패했습니다")
-
-    # 생성된 권한 반환
+        raise HTTPException(status_code=500, detail="권한 생성 실패")
+    
+    # 생성된 권한 조회
     perms = repo.get_user_permissions(data.knox_id)
     for p in perms:
-        if p["chatbot_id"] == data.chatbot_id:
+        if p.get("chatbot_id") == data.chatbot_id:
             return PermissionResponse(**p)
-
-    raise HTTPException(500, "권한 생성 후 조회 실패")
+    
+    raise HTTPException(status_code=404, detail="생성된 권한을 찾을 수 없음")
 
 
 @router.put("/{knox_id}/{chatbot_id}", response_model=PermissionResponse)
@@ -122,140 +143,114 @@ async def update_permission(
     chatbot_id: str,
     data: PermissionUpdate,
     repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
 ):
     """권한 수정 (can_access 값 변경)"""
-    # TODO: 관리자 권한 체크
-
-    success = repo.grant_access(knox_id, chatbot_id, data.can_access)
+    success = repo.grant_access(
+        knox_id=knox_id,
+        chatbot_id=chatbot_id,
+        can_access=data.can_access,
+    )
+    
     if not success:
-        raise HTTPException(500, "권한 수정에 실패했습니다")
-
+        raise HTTPException(status_code=404, detail="권한을 찾을 수 없음")
+    
+    # 수정된 권한 반환
     perms = repo.get_user_permissions(knox_id)
     for p in perms:
-        if p["chatbot_id"] == chatbot_id:
+        if p.get("chatbot_id") == chatbot_id:
             return PermissionResponse(**p)
-
-    raise HTTPException(404, "권한을 찾을 수 없습니다")
+    
+    raise HTTPException(status_code=404, detail="수정된 권한을 찾을 수 없음")
 
 
 @router.delete("/{knox_id}/{chatbot_id}")
-async def revoke_permission(
+async def delete_permission(
     knox_id: str,
     chatbot_id: str,
     repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
 ):
-    """권한 완전 삭제"""
-    # TODO: 관리자 권한 체크
-
+    """권한 삭제 (철회)"""
     success = repo.revoke_access(knox_id, chatbot_id)
+    
     if not success:
-        raise HTTPException(404, "권한을 찾을 수 없습니다")
+        raise HTTPException(status_code=404, detail="삭제할 권한을 찾을 수 없음")
+    
+    return {"message": "권한이 삭제되었습니다"}
 
-    return {"status": "success", "message": "권한이 삭제되었습니다"}
 
-
-@router.get("/chatbots/{chatbot_id}/users", response_model=ChatbotUsersResponse)
-async def get_chatbot_users(
-    chatbot_id: str,
+@router.post("/bulk", response_model=BulkPermissionResponse)
+async def bulk_create_permissions(
+    data: BulkPermissionRequest,
     repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
 ):
-    """특정 챗봘에 접근 가능한 사용자 목록"""
-    users = repo.get_chatbot_users(chatbot_id)
-
-    return ChatbotUsersResponse(
-        chatbot_id=chatbot_id,
-        users=users,
-        total=len(users),
+    """여러 챗봘에 대해 일괄 권한 설정"""
+    success_count = 0
+    failed_count = 0
+    errors = []
+    
+    for chatbot_id in data.chatbot_ids:
+        try:
+            success = repo.grant_access(
+                knox_id=data.knox_id,
+                chatbot_id=chatbot_id,
+                can_access=data.can_access,
+            )
+            if success:
+                success_count += 1
+            else:
+                failed_count += 1
+                errors.append(f"{chatbot_id}: 처리 실패")
+        except Exception as e:
+            failed_count += 1
+            errors.append(f"{chatbot_id}: {str(e)}")
+    
+    return BulkPermissionResponse(
+        total=len(data.chatbot_ids),
+        success_count=success_count,
+        failed_count=failed_count,
+        errors=errors,
     )
 
 
-@router.get("/")
-async def list_all_permissions(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
-):
-    """전체 권한 목록 (관리자용)"""
-    # TODO: 관리자 권한 체크
-
-    perms = repo.get_all_permissions(skip, limit)
-    return {
-        "permissions": [PermissionResponse(**p) for p in perms],
-        "skip": skip,
-        "limit": limit,
-        "total_returned": len(perms),
-    }
-
-
-@router.post("/bulk")
-async def bulk_grant_permissions(
-    knox_id: str,
-    chatbot_ids: List[str],
-    can_access: bool = True,
-    repo: PermissionRepository = Depends(get_perm_repo),
-    current_user: dict = Depends(get_current_user),
-):
-    """일괄 권한 부여 (여러 챗봘에 동시 권한 설정)"""
-    # TODO: 관리자 권한 체크
-
-    results = []
-    for chatbot_id in chatbot_ids:
-        success = repo.grant_access(knox_id, chatbot_id, can_access)
-        results.append({"chatbot_id": chatbot_id, "success": success})
-
-    success_count = sum(1 for r in results if r["success"])
-    return {
-        "status": "success",
-        "knox_id": knox_id,
-        "total": len(chatbot_ids),
-        "success_count": success_count,
-        "results": results,
-    }
-
-
-# ── 관리자용 통계 API ────────────────────────────────────────────
-@router.get("/admin/stats")
+@router.get("/admin/stats", response_model=PermissionStats)
 async def get_permission_stats(
     repo: PermissionRepository = Depends(get_perm_repo),
-    chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
-    current_user: dict = Depends(get_current_user),
 ):
-    """권한 통계 (관리자용)"""
-    # TODO: 관리자 권한 체크
-
-    all_perms = repo.get_all_permissions(skip=0, limit=10000)
-
+    """권한 통계 정보 조회 (관리자용)"""
+    all_perms = repo.get_all_permissions(limit=10000)
+    
     # 사용자별 통계
     user_stats = {}
     for p in all_perms:
-        knox_id = p["knox_id"]
+        knox_id = p.get("knox_id", "unknown")
         if knox_id not in user_stats:
-            user_stats[knox_id] = {"total": 0, "accessible": 0}
+            user_stats[knox_id] = {"accessible": 0, "total": 0}
         user_stats[knox_id]["total"] += 1
-        if p["can_access"]:
+        if p.get("can_access"):
             user_stats[knox_id]["accessible"] += 1
+    
+    # 고유 사용자/챗봇 수
+    unique_users = len(set(p.get("knox_id") for p in all_perms))
+    unique_chatbots = len(set(p.get("chatbot_id") for p in all_perms))
+    
+    return PermissionStats(
+        total_permissions=len(all_perms),
+        unique_users=unique_users,
+        unique_chatbots=unique_chatbots,
+        user_stats=user_stats,
+    )
 
-    # 챗봘별 통계
-    chatbot_stats = {}
-    all_chatbots = chatbot_mgr.list_all()
-    for cb in all_chatbots:
-        chatbot_stats[cb.id] = {"name": cb.name, "users": 0, "access_count": 0}
 
-    for p in all_perms:
-        cb_id = p["chatbot_id"]
-        if cb_id in chatbot_stats:
-            chatbot_stats[cb_id]["users"] += 1
-            if p["can_access"]:
-                chatbot_stats[cb_id]["access_count"] += 1
-
+@router.get("/check/{knox_id}/{chatbot_id}")
+async def check_permission(
+    knox_id: str,
+    chatbot_id: str,
+    repo: PermissionRepository = Depends(get_perm_repo),
+):
+    """특정 사용자-챗봘 권한 확인"""
+    has_access = repo.check_access(knox_id, chatbot_id)
     return {
-        "total_permissions": len(all_perms),
-        "unique_users": len(user_stats),
-        "unique_chatbots": len(chatbot_stats),
-        "user_stats": user_stats,
-        "chatbot_stats": chatbot_stats,
+        "knox_id": knox_id,
+        "chatbot_id": chatbot_id,
+        "can_access": has_access,
     }

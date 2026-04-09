@@ -102,11 +102,11 @@
                     <h2>사용자 권한 관리</h2>
                     <div class="header-actions">
                         <div class="search-box">
-                            <input type="text" id="userSearchInput" placeholder="사용자 Knox ID 검색...">
+                            <input type="text" id="userSearchInput" placeholder="사용자 Knox ID 검색..." oninput="filterUsers()">
                             <span class="search-icon">🔍</span>
                         </div>
-                        <button class="btn btn-primary" onclick="openBulkPermissionModal()">
-                            <span>+</span> 일괄 권한 부여
+                        <button class="btn btn-primary" onclick="openAddPermissionModal()">
+                            <span>+</span> 권한 추가
                         </button>
                     </div>
                 </header>
@@ -276,38 +276,58 @@
         </div>
     </div>
 
-    <!-- Bulk Permission Modal -->
-    <div class="modal" id="bulkPermissionModal">
+    <!-- Add Permission Modal -->
+    <div class="modal" id="addPermissionModal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>일괄 권한 부여</h3>
-                <button class="close-btn" onclick="closeBulkPermissionModal()">&times;</button>
+                <h3>권한 추가</h3>
+                <button class="close-btn" onclick="closeAddPermissionModal()">&times;</button>
             </div>
-            <form id="bulkPermissionForm" class="modal-body" onsubmit="saveBulkPermissions(event)">
+            <form id="addPermissionForm" class="modal-body" onsubmit="saveAddPermission(event)">
                 <div class="form-group">
                     <label>사용자 Knox ID *</label>
-                    <input type="text" id="bulkUserId" placeholder="예: user-001" required>
+                    <input type="text" id="addUserId" placeholder="예: user-001" required>
+                    <small>사용자의 Knox ID를 입력하세요</small>
                 </div>
                 <div class="form-group">
-                    <label>챗봘 선택</label>
-                    <div class="chatbot-checkbox-list" id="bulkChatbotList">
-                        <div class="loading"><div class="spinner"></div></div>
-                    </div>
+                    <label>챗봇 선택 *</label>
+                    <select id="addChatbotId" required>
+                        <option value="">챗봇을 선택하세요</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>권한 설정</label>
-                    <select id="bulkAccessType">
-                        <option value="true">접근 허용</option>
-                        <option value="false">접근 차단</option>
-                    </select>
+                    <div class="toggle-group">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="addCanAccess" checked>
+                            <span class="toggle-switch"></span>
+                            <span class="toggle-text">접근 허용</span>
+                        </label>
+                    </div>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" onclick="closeBulkPermissionModal()">취소</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeAddPermissionModal()">취소</button>
                     <button type="submit" class="btn btn-primary">저장</button>
                 </div>
             </form>
         </div>
     </div>
+
+    <!-- User Detail Modal -->
+    <div class="modal" id="userDetailModal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3 id="userDetailTitle">사용자 권한 상세</h3>
+                <button class="close-btn" onclick="closeUserDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="userDetailContent">
+                <!-- Dynamic content -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeUserDetailModal()">닫기</button>
+            </div>
+        </div>
+    </div
 
     <!-- Delete Confirmation Modal -->
     <div class="modal" id="deleteModal">
