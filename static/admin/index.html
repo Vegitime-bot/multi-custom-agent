@@ -297,11 +297,16 @@
                 </div>
                 <div class="form-group">
                     <label>권한 설정</label>
-                    <div class="toggle-group">
-                        <label class="toggle-label">
-                            <input type="checkbox" id="addCanAccess" checked>
-                            <span class="toggle-switch"></span>
-                            <span class="toggle-text">접근 허용</span>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="addCanAccess" value="true" checked>
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">접근 허용</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="addCanAccess" value="false">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">접근 차단</span>
                         </label>
                     </div>
                 </div>

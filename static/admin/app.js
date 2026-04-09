@@ -706,7 +706,8 @@ async function saveAddPermission(event) {
     
     const knoxId = document.getElementById('addUserId').value.trim();
     const chatbotId = document.getElementById('addChatbotId').value;
-    const canAccess = document.getElementById('addCanAccess').checked;
+    const canAccessRadio = document.querySelector('input[name="addCanAccess"]:checked');
+    const canAccess = canAccessRadio ? canAccessRadio.value === 'true' : true;
     
     if (!knoxId || !chatbotId) {
         showToast('사용자 ID와 챗봘을 모두 선택하세요', 'error');
