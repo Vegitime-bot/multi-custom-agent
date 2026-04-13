@@ -679,13 +679,17 @@ class HierarchicalAgentExecutor(AgentExecutor):
         parent_context: str = "",
     ) -> List[Tuple[str, str, str]]:
         """순차적으로 다중 하위 Agent 실행"""
+        print(f"[EXECUTE MULTI] Sequential execution for {len(sub_candidates)} candidates", flush=True)
         results = []
         for sub_chatbot, selection_info, scores in sub_candidates:
+            print(f"[EXECUTE MULTI] Executing: {sub_chatbot.name}", flush=True)
             try:
                 response = self._execute_single_sub(sub_chatbot, message, session_id, parent_context)
+                print(f"[EXECUTE MULTI] {sub_chatbot.name} response length: {len(response)}", flush=True)
                 if response:
                     results.append((sub_chatbot.id, sub_chatbot.name, response))
             except Exception as e:
+                print(f"[EXECUTE MULTI] {sub_chatbot.name} error: {e}", flush=True)
                 results.append((sub_chatbot.id, sub_chatbot.name, f"[오류: 응답 생성 실패 - {str(e)}]"))
         return results
 
@@ -697,14 +701,18 @@ class HierarchicalAgentExecutor(AgentExecutor):
         parent_context: str = "",
     ) -> List[Tuple[str, str, str]]:
         """병렬로 다중 하위 Agent 실행"""
+        print(f"[EXECUTE MULTI] Parallel execution for {len(sub_candidates)} candidates", flush=True)
         results = []
         errors = []
 
         def execute_single(sub_chatbot: ChatbotDef) -> Tuple[str, str, Optional[str]]:
+            print(f"[EXECUTE MULTI] Parallel executing: {sub_chatbot.name}", flush=True)
             try:
                 response = self._execute_single_sub(sub_chatbot, message, session_id, parent_context)
+                print(f"[EXECUTE MULTI] {sub_chatbot.name} got response", flush=True)
                 return (sub_chatbot.id, sub_chatbot.name, response)
-            except Exception:
+            except Exception as e:
+                print(f"[EXECUTE MULTI] {sub_chatbot.name} error: {e}", flush=True)
                 return (sub_chatbot.id, sub_chatbot.name, None)
 
         with ThreadPoolExecutor(max_workers=min(len(sub_candidates), 5)) as executor:
