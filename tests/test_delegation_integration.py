@@ -102,16 +102,16 @@ class TestSubDelegationScenario:
     
     @pytest.fixture
     def setup_sub_delegation(self):
-        """Setup parent executor with sub_chatbots"""
+        """Setup child executor with sub_chatbots (level=2, not parent)"""
         sub_refs = [
-            SubChatbotRef(id='chatbot-hr-policy', level=2, default_role=ExecutionRole.AGENT),
-            SubChatbotRef(id='chatbot-hr-benefit', level=2, default_role=ExecutionRole.AGENT),
+            SubChatbotRef(id='chatbot-hr-policy', level=3, default_role=ExecutionRole.AGENT),
+            SubChatbotRef(id='chatbot-hr-benefit', level=3, default_role=ExecutionRole.AGENT),
         ]
         
         chatbot = make_chatbot_def(
             chatbot_id="chatbot-hr",
             name="HR Bot",
-            level=1,
+            level=2,  # Child level (>=2), can delegate to sub
             sub_chatbots=sub_refs,
             parent_id="chatbot-company",
             db_ids=["hr-db"],
@@ -130,16 +130,16 @@ class TestSubDelegationScenario:
         
         return executor
     
-    def test_low_confidence_delegates_to_sub(self, setup_sub_delegation):
-        """TC-SYS-002: Low confidence with sub_chatbots should delegate to sub"""
+    def test_child_low_confidence_delegates_to_sub(self, setup_sub_delegation):
+        """TC-SYS-002: Child (level=2+) with low confidence should delegate to sub"""
         executor = setup_sub_delegation
         
         result = executor._select_delegate_target(confidence=40)
         
         assert result.target == 'sub'
     
-    def test_sub_delegation_priority_over_parent(self, setup_sub_delegation):
-        """TC-SYS-003: Sub delegation should be preferred over parent delegation"""
+    def test_child_sub_delegation_priority_over_parent(self, setup_sub_delegation):
+        """TC-SYS-003: Child with sub_chatbots should prefer sub over parent"""
         executor = setup_sub_delegation
         
         result = executor._select_delegate_target(confidence=30)

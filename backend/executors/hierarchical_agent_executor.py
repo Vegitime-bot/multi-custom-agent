@@ -180,32 +180,53 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
     def _select_delegate_target(self, confidence: float) -> DelegateResult:
         """
-        단일 책임: 위임 대상 결정
+        개선된 위임 대상 결정
+
+        위임 방향:
+        - Parent (Level 0, 1): Confidence 낮으면 상위로 위임 또는 fallback
+        - Child/Leaf (Level 2+): Confidence 낮으면 하위로 위임
 
         Returns:
             DelegateResult(target='self'|'sub'|'parent'|'fallback')
         """
+        # 충분한 Confidence면 자체 답변
         if confidence >= self.delegation_threshold:
             return DelegateResult(
                 target='self',
                 reason=f"confidence {confidence}% >= threshold {self.delegation_threshold}%",
             )
 
+        current_level = self.chatbot_def.level
+
+        # Level 0, 1: Parent/Root - 하위 위임 금지, 상위로 위임 또는 fallback
+        if current_level <= 1:
+            if self.enable_parent_delegation and self.chatbot_def.parent_id:
+                return DelegateResult(
+                    target='parent',
+                    reason=f"Parent level={current_level}, confidence {confidence}% < threshold, delegate UP",
+                )
+            return DelegateResult(
+                target='fallback',
+                reason=f"Root level={current_level}, confidence {confidence}% < threshold, fallback to self",
+            )
+
+        # Level 2+: Child/Leaf - 하위 위임 허용
         if self.chatbot_def.sub_chatbots:
             return DelegateResult(
                 target='sub',
-                reason=f"confidence {confidence}% < threshold, has sub_chatbots",
+                reason=f"Child level={current_level}, confidence {confidence}% < threshold, delegate to sub",
             )
 
+        # 하위 없으면 상위로 위임
         if self.enable_parent_delegation and self.chatbot_def.parent_id:
             return DelegateResult(
                 target='parent',
-                reason=f"confidence {confidence}% < threshold, no sub_chatbots, has parent",
+                reason=f"Leaf level={current_level}, confidence {confidence}% < threshold, no sub, delegate UP",
             )
 
         return DelegateResult(
             target='fallback',
-            reason=f"confidence {confidence}% < threshold, no delegation target available",
+            reason=f"Leaf level={current_level}, confidence {confidence}% < threshold, no delegation target",
         )
 
     def _delegate(
