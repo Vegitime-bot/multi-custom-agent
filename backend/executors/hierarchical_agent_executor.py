@@ -136,6 +136,14 @@ class HierarchicalAgentExecutor(AgentExecutor):
         Phase 2: 위임 결정 및 실행 (_select_delegate_target → _delegate or _respond_directly)
         Phase 3: Fallback 처리 (_respond_uncertain)
         """
+        # 강제 stdout 출력 (로깅 설정 무관)
+        print(f"[EXECUTE] Chatbot: {self.chatbot_def.name} (ID: {self.chatbot_def.id})", flush=True)
+        print(f"[EXECUTE] Message: {message[:50]}...", flush=True)
+        print(f"[EXECUTE] Session: {session_id}", flush=True)
+        print(f"[EXECUTE] Delegation depth: {self.delegation_depth}", flush=True)
+        print(f"[EXECUTE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}", flush=True)
+        print(f"[EXECUTE] Parent ID: {self.chatbot_def.parent_id}", flush=True)
+        
         logger.info(f"[EXECUTE] Chatbot: {self.chatbot_def.name} (ID: {self.chatbot_def.id})")
         logger.info(f"[EXECUTE] Message: {message[:50]}...")
         logger.info(f"[EXECUTE] Session: {session_id}")
@@ -162,6 +170,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         # Phase 2: 위임 결정 및 실행
         delegate = self._select_delegate_target(confidence, message)
+        # DEBUG: print로 강제 출력
+        print(f"[DELEGATION PATH] {self.chatbot_def.name} → {delegate.target.upper()} | {delegate.reason}", flush=True)
         logger.info(
             f"[DELEGATION PATH] {self.chatbot_def.name} → {delegate.target.upper()} | {delegate.reason}"
         )
@@ -500,19 +510,24 @@ class HierarchicalAgentExecutor(AgentExecutor):
         # 실제 환경: message가 있으면 질문 적합성 검사
         if message:
             message_lower = message.lower()
+            logger.info(f"[DELEGATION] Evaluating {len(candidates)} sub chatbots for message: {message[:50]}...")
+            logger.info(f"[DELEGATION] Hybrid score threshold: {self.hybrid_score_threshold}")
+            
             for sub_def in candidates:
                 try:
                     kw_score = self._keyword_score(sub_def, message_lower)
                     emb_score = self._embedding_score(message, sub_def)
                     hybrid = self.KEYWORD_WEIGHT * kw_score + self.EMBEDDING_WEIGHT * emb_score
                     
+                    logger.info(f"[DELEGATION] Sub {sub_def.name}: kw={kw_score:.3f}, emb={emb_score:.3f}, hybrid={hybrid:.3f} (threshold={self.hybrid_score_threshold})")
+                    
                     if hybrid >= self.hybrid_score_threshold:
-                        logger.debug(f"[DELEGATION] Found qualified sub: {sub_def.name} (hybrid={hybrid:.3f})")
+                        logger.info(f"[DELEGATION] ✓ Found qualified sub: {sub_def.name} (hybrid={hybrid:.3f})")
                         return True
                 except Exception as e:
                     logger.warning(f"[DELEGATION] Error evaluating sub {sub_def.id}: {e}")
                     continue
-            logger.debug("[DELEGATION] No qualified sub found for this message")
+            logger.warning("[DELEGATION] ✗ No qualified sub found for this message")
             return False
         
         # 테스트 환경: message 없으면 하위 존재 여부만 확인
