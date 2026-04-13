@@ -71,8 +71,8 @@ class TestSelectDelegateTarget:
         assert '75' in result.reason
         assert 'threshold' in result.reason.lower()
     
-    def test_parent_low_confidence_with_sub_returns_fallback(self, mock_executor):
-        """TC-DELEGATE-002: Parent (level=1) with sub_chatbots should NOT delegate to sub"""
+    def test_parent_low_confidence_with_sub_delegates_to_sub(self, mock_executor):
+        """TC-DELEGATE-002: Parent (level=1) with qualified sub should delegate to sub"""
         mock_executor.delegation_threshold = 70
         mock_executor.chatbot_def.level = 1  # Parent
         mock_executor.chatbot_def.sub_chatbots = [
@@ -80,12 +80,13 @@ class TestSelectDelegateTarget:
         ]
         mock_executor.enable_parent_delegation = True
         mock_executor.chatbot_def.parent_id = "grandparent-bot"
+        mock_executor.chatbot_manager = Mock()  # chatbot_manager 있음
         
         result = mock_executor._select_delegate_target(confidence=50)
         
-        # Parent는 하위로 위임하지 않고 상위로 위임
-        assert result.target == 'parent'
-        assert 'delegate UP' in result.reason
+        # Parent도 적합한 하위 있으면 하위로 위임
+        assert result.target == 'sub'
+        assert 'has qualified sub_chatbots' in result.reason
     
     def test_child_low_confidence_with_sub_returns_sub(self, mock_executor):
         """TC-DELEGATE-002b: Child (level=2) with sub_chatbots should delegate to sub"""
@@ -96,12 +97,13 @@ class TestSelectDelegateTarget:
         ]
         mock_executor.enable_parent_delegation = True
         mock_executor.chatbot_def.parent_id = "parent-bot"
+        mock_executor.chatbot_manager = Mock()  # chatbot_manager 있음
         
         result = mock_executor._select_delegate_target(confidence=50)
         
-        # Child는 하위로 위임
+        # Child도 하위 있으면 하위로 위임
         assert result.target == 'sub'
-        assert 'delegate to sub' in result.reason
+        assert 'has qualified sub_chatbots' in result.reason
     
     def test_parent_low_confidence_no_sub_with_parent_returns_parent(self, mock_executor):
         """TC-DELEGATE-003: Parent (level=1), no sub, has parent should delegate UP"""
@@ -255,7 +257,7 @@ class TestExecuteDelegationDecision:
 
 
 class TestParentLevelLogic:
-    """Parent level delegation logic tests"""
+    """Parent level delegation logic tests - FIXED"""
 
     @pytest.fixture
     def mock_parent_executor(self):
@@ -273,26 +275,36 @@ class TestParentLevelLogic:
 
         mock_ingestion = Mock()
         mock_memory = Mock()
+        mock_manager = Mock()
 
         executor = HierarchicalAgentExecutor(
             chatbot_def=mock_chatbot,
             ingestion_client=mock_ingestion,
             memory_manager=mock_memory,
+            chatbot_manager=mock_manager,
         )
         executor.enable_parent_delegation = True
         executor.delegation_threshold = 70
         return executor
 
-    def test_parent_does_not_delegate_to_sub(self, mock_parent_executor):
-        """TC-PARENT-001: Parent should NEVER delegate to sub_chatbots"""
+    def test_parent_with_qualified_sub_delegates_to_sub(self, mock_parent_executor):
+        """TC-PARENT-001: Parent with qualified sub should delegate to sub"""
+        # 하위 Agent가 존재하도록 설정
+        mock_sub = Mock(spec=ChatbotDef)
+        mock_sub.id = "sub-bot-1"
+        mock_sub.name = "Sub Bot"
+        mock_parent_executor.chatbot_manager.get_active = Mock(return_value=mock_sub)
+
         result = mock_parent_executor._select_delegate_target(confidence=50)
 
-        # Parent는 하위로 위임하지 않음 (sub 반환 안 됨)
-        assert result.target != 'sub'
-        assert result.target in ['parent', 'fallback']
+        # Parent도 적합한 하위 있으면 하위로 위임
+        assert result.target == 'sub'
 
-    def test_parent_delegates_up_when_low_confidence(self, mock_parent_executor):
-        """TC-PARENT-002: Parent should delegate UP when confidence is low"""
+    def test_parent_delegates_up_when_no_qualified_sub(self, mock_parent_executor):
+        """TC-PARENT-002: Parent should delegate UP when no qualified sub"""
+        # 하위 Agent 없음
+        mock_parent_executor.chatbot_def.sub_chatbots = []
+
         result = mock_parent_executor._select_delegate_target(confidence=50)
 
         assert result.target == 'parent'
@@ -337,17 +349,21 @@ class TestDelegationPathLogic:
     def test_priority_sub_over_parent_for_child(self, mock_executor_with_all_options):
         """TC-PRIORITY-002: Child (level>=2) with sub_chatbots, should prefer sub over parent"""
         mock_executor_with_all_options.chatbot_def.level = 2  # Child
+        mock_executor_with_all_options.chatbot_manager = Mock()  # 하위 확인용
         result = mock_executor_with_all_options._select_delegate_target(confidence=50)
         
         assert result.target == 'sub'
+        assert 'has qualified sub_chatbots' in result.reason
     
-    def test_priority_parent_for_parent_with_sub(self, mock_executor_with_all_options):
-        """TC-PRIORITY-002b: Parent (level<=1) with sub_chatbots, should delegate UP not sub"""
+    def test_priority_sub_for_parent_with_qualified_sub(self, mock_executor_with_all_options):
+        """TC-PRIORITY-002b: Parent (level<=1) with qualified sub, should delegate to sub"""
         mock_executor_with_all_options.chatbot_def.level = 1  # Parent
+        mock_executor_with_all_options.chatbot_manager = Mock()  # 하위 확인용
         result = mock_executor_with_all_options._select_delegate_target(confidence=50)
         
-        # Parent는 하위로 위임하지 않음
-        assert result.target == 'parent'
+        # Parent도 적합한 하위 있으면 하위로 위임
+        assert result.target == 'sub'
+        assert 'has qualified sub_chatbots' in result.reason
     
     def test_priority_parent_over_fallback(self, mock_executor_with_all_options):
         """TC-PRIORITY-003: Without sub but with parent, should prefer parent"""

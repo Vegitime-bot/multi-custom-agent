@@ -183,8 +183,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
         개선된 위임 대상 결정
 
         위임 방향:
-        - Parent (Level 0, 1): Confidence 낮으면 상위로 위임 또는 fallback
-        - Child/Leaf (Level 2+): Confidence 낮으면 하위로 위임
+        - Confidence >= threshold: 자체 답변
+        - Confidence < threshold:
+          - 하위 Agent 중 적합한 후보 있으면 하위로 위임
+          - 적합한 후보 없으면 상위로 위임 또는 fallback
 
         Returns:
             DelegateResult(target='self'|'sub'|'parent'|'fallback')
@@ -196,37 +198,30 @@ class HierarchicalAgentExecutor(AgentExecutor):
                 reason=f"confidence {confidence}% >= threshold {self.delegation_threshold}%",
             )
 
+        # Confidence 낮음 - 위임 대상 탐색
         current_level = self.chatbot_def.level
 
-        # Level 0, 1: Parent/Root - 하위 위임 금지, 상위로 위임 또는 fallback
-        if current_level <= 1:
-            if self.enable_parent_delegation and self.chatbot_def.parent_id:
-                return DelegateResult(
-                    target='parent',
-                    reason=f"Parent level={current_level}, confidence {confidence}% < threshold, delegate UP",
-                )
-            return DelegateResult(
-                target='fallback',
-                reason=f"Root level={current_level}, confidence {confidence}% < threshold, fallback to self",
-            )
-
-        # Level 2+: Child/Leaf - 하위 위임 허용
+        # 1순위: 하위 Agent 중 적합한 후보 선택 (hybrid_score_threshold 적용)
         if self.chatbot_def.sub_chatbots:
-            return DelegateResult(
-                target='sub',
-                reason=f"Child level={current_level}, confidence {confidence}% < threshold, delegate to sub",
-            )
+            # 실제로 적합한 하위가 있는지 미리 확인
+            sub_candidates = self._select_sub_chatbot_hybrid_multi_for_delegation()
+            if sub_candidates:
+                return DelegateResult(
+                    target='sub',
+                    reason=f"level={current_level}, confidence {confidence}% < threshold, has qualified sub_chatbots",
+                )
 
-        # 하위 없으면 상위로 위임
+        # 2순위: 상위 Agent로 위임
         if self.enable_parent_delegation and self.chatbot_def.parent_id:
             return DelegateResult(
                 target='parent',
-                reason=f"Leaf level={current_level}, confidence {confidence}% < threshold, no sub, delegate UP",
+                reason=f"level={current_level}, confidence {confidence}% < threshold, no qualified sub, delegate UP",
             )
 
+        # 3순위: Fallback (최선의 답변 시도)
         return DelegateResult(
             target='fallback',
-            reason=f"Leaf level={current_level}, confidence {confidence}% < threshold, no delegation target",
+            reason=f"level={current_level}, confidence {confidence}% < threshold, no qualified delegation target",
         )
 
     def _delegate(
@@ -479,6 +474,27 @@ class HierarchicalAgentExecutor(AgentExecutor):
     # ====================================================================
     # 하위 Agent 선택 (하이브리드 방식)
     # ====================================================================
+
+    def _select_sub_chatbot_hybrid_multi_for_delegation(self) -> bool:
+        """
+        위임 결정용: 하위 Agent 중 threshold 이상인 후보가 있는지 확인
+        
+        Returns:
+            bool: threshold 이상인 후보가 있으면 True
+        """
+        if not self.chatbot_manager or not self.chatbot_def.sub_chatbots:
+            return False
+
+        candidates = []
+        for sub_ref in self.chatbot_def.sub_chatbots:
+            sub_def = self.chatbot_manager.get_active(sub_ref.id)
+            if sub_def:
+                candidates.append(sub_def)
+
+        if not candidates:
+            return False
+
+        return True  # 하위가 있으면 일단 위임 시도 (실제 선택은 _delegate_to_sub_chatbots에서 수행)
 
     def _select_sub_chatbot_hybrid(self, message: str) -> Tuple[Optional[ChatbotDef], str]:
         """하이브리드 하위 Agent 선택 (단일 반환)"""
