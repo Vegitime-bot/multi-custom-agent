@@ -739,12 +739,17 @@ class HierarchicalAgentExecutor(AgentExecutor):
         """단일 하위 Agent 실행 (전체 응답 수집)"""
         from backend.executors import AgentExecutor
 
+        print(f"[EXECUTE SINGLE] Sub: {sub_chatbot.name}, DBs: {sub_chatbot.retrieval.db_ids}", flush=True)
+        
         sub_executor = AgentExecutor(sub_chatbot, self.ingestion, self.memory)
         enhanced_message = message
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
+        print(f"[EXECUTE SINGLE] Calling execute for {sub_chatbot.name}...", flush=True)
         sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
+        print(f"[EXECUTE SINGLE] {sub_chatbot.name} answer length: {len(sub_answer)}", flush=True)
+        
         source_header = f"🧾 {self._source_note(sub_chatbot)}\n\n"
         return source_header + sub_answer
 
