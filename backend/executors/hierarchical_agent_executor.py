@@ -337,7 +337,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
                                                          reason="적합한 하위 Agent를 찾을 수 없습니다")
             return
 
-        yield f"**선택된 전문가**: {', '.join([c['chatbot'].name for c in sub_candidates])}\n\n"
+        yield f"**선택된 전문가**: {', '.join([c[0].name for c in sub_candidates])}\n\n"
         sub_responses = self._execute_multiple_subs(sub_candidates, message, session_id, context)
 
         if sub_responses:
