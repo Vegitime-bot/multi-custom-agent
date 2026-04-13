@@ -91,7 +91,7 @@ class TestDirectAnswerScenario:
         """TC-SYS-001: High confidence should produce direct answer without delegation"""
         executor = setup_direct_answer
         
-        result = executor._select_delegate_target(confidence=85)
+        result = executor._select_delegate_target(confidence=85, message="테스트 질문")
         
         assert result.target == 'self'
         assert 'self' == result.target
@@ -138,7 +138,7 @@ class TestSubDelegationScenario:
         executor = setup_sub_delegation
         executor.chatbot_manager = Mock()  # 하위 확인용
         
-        result = executor._select_delegate_target(confidence=40)
+        result = executor._select_delegate_target(confidence=40, message="테스트 질문")
         
         assert result.target == 'sub'
         assert 'has qualified sub_chatbots' in result.reason
@@ -148,7 +148,7 @@ class TestSubDelegationScenario:
         executor = setup_sub_delegation
         executor.chatbot_manager = Mock()  # 하위 확인용
         
-        result = executor._select_delegate_target(confidence=30)
+        result = executor._select_delegate_target(confidence=30, message="테스트 질문")
         
         assert result.target == 'sub'
         assert 'has qualified sub_chatbots' in result.reason
@@ -187,7 +187,7 @@ class TestParentDelegationScenario:
         """TC-SYS-004: Leaf with low confidence should delegate to parent"""
         executor = setup_parent_delegation
         
-        result = executor._select_delegate_target(confidence=30)
+        result = executor._select_delegate_target(confidence=30, message="테스트 질문")
         
         assert result.target == 'parent'
     
@@ -196,7 +196,7 @@ class TestParentDelegationScenario:
         executor = setup_parent_delegation
         executor.enable_parent_delegation = False
         
-        result = executor._select_delegate_target(confidence=30)
+        result = executor._select_delegate_target(confidence=30, message="테스트 질문")
         
         assert result.target == 'fallback'
 
@@ -273,7 +273,7 @@ class TestFallbackScenario:
         """TC-SYS-007: Bot without sub or parent should fallback"""
         executor = setup_isolated_bot
         
-        result = executor._select_delegate_target(confidence=30)
+        result = executor._select_delegate_target(confidence=30, message="테스트 질문")
         
         assert result.target == 'fallback'
 

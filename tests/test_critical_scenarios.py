@@ -496,7 +496,7 @@ class TestCriticalScenarios:
         executor_a.delegation_threshold = 70
         
         # confidence가 정확히 threshold
-        result = executor_a._select_delegate_target(confidence=70)
+        result = executor_a._select_delegate_target(confidence=70, message="테스트 질문")
         
         assert result.target == 'self', \
             "[TC-09] confidence == threshold 이면 'self'"

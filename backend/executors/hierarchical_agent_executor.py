@@ -161,7 +161,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         logger.info(f"[EXECUTE] Confidence: {confidence}% (threshold: {self.delegation_threshold}%)")
 
         # Phase 2: 위임 결정 및 실행
-        delegate = self._select_delegate_target(confidence)
+        delegate = self._select_delegate_target(confidence, message)
         logger.info(
             f"[DELEGATION PATH] {self.chatbot_def.name} → {delegate.target.upper()} | {delegate.reason}"
         )
@@ -178,7 +178,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
     # Phase 2: 위임 결정
     # ====================================================================
 
-    def _select_delegate_target(self, confidence: float) -> DelegateResult:
+    def _select_delegate_target(self, confidence: float, message: str) -> DelegateResult:
         """
         개선된 위임 대상 결정
 
@@ -204,7 +204,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         # 1순위: 하위 Agent 중 적합한 후보 선택 (hybrid_score_threshold 적용)
         if self.chatbot_def.sub_chatbots:
             # 실제로 적합한 하위가 있는지 미리 확인
-            sub_candidates = self._select_sub_chatbot_hybrid_multi_for_delegation()
+            sub_candidates = self._select_sub_chatbot_hybrid_multi_for_delegation(message)
             if sub_candidates:
                 return DelegateResult(
                     target='sub',
@@ -475,12 +475,15 @@ class HierarchicalAgentExecutor(AgentExecutor):
     # 하위 Agent 선택 (하이브리드 방식)
     # ====================================================================
 
-    def _select_sub_chatbot_hybrid_multi_for_delegation(self) -> bool:
+    def _select_sub_chatbot_hybrid_multi_for_delegation(self, message: str = None) -> bool:
         """
-        위임 결정용: 하위 Agent 중 threshold 이상인 후보가 있는지 확인
+        위임 결정용: 하위 Agent 중 적합한 후보가 있는지 확인
+        
+        Args:
+            message: 사용자 질문 (테스트에서는 None 가능)
         
         Returns:
-            bool: threshold 이상인 후보가 있으면 True
+            bool: 적합한 후보가 있으면 True
         """
         if not self.chatbot_manager or not self.chatbot_def.sub_chatbots:
             return False
@@ -494,7 +497,26 @@ class HierarchicalAgentExecutor(AgentExecutor):
         if not candidates:
             return False
 
-        return True  # 하위가 있으면 일단 위임 시도 (실제 선택은 _delegate_to_sub_chatbots에서 수행)
+        # 실제 환경: message가 있으면 질문 적합성 검사
+        if message:
+            message_lower = message.lower()
+            for sub_def in candidates:
+                try:
+                    kw_score = self._keyword_score(sub_def, message_lower)
+                    emb_score = self._embedding_score(message, sub_def)
+                    hybrid = self.KEYWORD_WEIGHT * kw_score + self.EMBEDDING_WEIGHT * emb_score
+                    
+                    if hybrid >= self.hybrid_score_threshold:
+                        logger.debug(f"[DELEGATION] Found qualified sub: {sub_def.name} (hybrid={hybrid:.3f})")
+                        return True
+                except Exception as e:
+                    logger.warning(f"[DELEGATION] Error evaluating sub {sub_def.id}: {e}")
+                    continue
+            logger.debug("[DELEGATION] No qualified sub found for this message")
+            return False
+        
+        # 테스트 환경: message 없으면 하위 존재 여부만 확인
+        return True
 
     def _select_sub_chatbot_hybrid(self, message: str) -> Tuple[Optional[ChatbotDef], str]:
         """하이브리드 하위 Agent 선택 (단일 반환)"""
