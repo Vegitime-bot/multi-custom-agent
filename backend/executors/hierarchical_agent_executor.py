@@ -296,6 +296,9 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """하위 챗봇으로 위임"""
+        print(f"[DELEGATE] Starting sub delegation from {self.chatbot_def.name}", flush=True)
+        print(f"[DELEGATE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}", flush=True)
+        print(f"[DELEGATE] multi_sub_execution: {self.multi_sub_execution}", flush=True)
         logger.info(f"[DELEGATE] Starting sub delegation from {self.chatbot_def.name}")
         logger.info(f"[DELEGATE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}")
 
@@ -316,22 +319,25 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """다중 하위 Agent 선택 및 실행"""
+        print("[DELEGATE] _delegate_to_multi_subs called", flush=True)
         logger.info("[DELEGATE] Multi-sub execution enabled")
+        
         sub_candidates = self._select_sub_chatbot_hybrid_multi(message)
+        print(f"[DELEGATE] candidates: {len(sub_candidates)}", flush=True)
+        
+        for candidate in sub_candidates:
+            print(f"[DELEGATE]   - {candidate}", flush=True)
+        
         logger.info(f"[DELEGATE] Selected {len(sub_candidates)} candidates")
-        for chatbot, info, scores in sub_candidates:
-            logger.info(
-                f"[DELEGATE]   - {chatbot.name} (ID: {chatbot.id}): "
-                f"hybrid={scores['hybrid']:.3f}, kw={scores['keyword']:.3f}, emb={scores['embedding']:.3f}"
-            )
-
+        
         if not sub_candidates:
+            print("[DELEGATE] No candidates, falling back", flush=True)
             logger.info("[DELEGATE] No multi-sub candidates found, falling back")
             yield from self._fallback_to_parent_or_self(message, session_id, context, confidence,
                                                          reason="적합한 하위 Agent를 찾을 수 없습니다")
             return
 
-        yield f"**선택된 전문가**: {', '.join([c[0].name for c in sub_candidates])}\n\n"
+        yield f"**선택된 전문가**: {', '.join([c['chatbot'].name for c in sub_candidates])}\n\n"
         sub_responses = self._execute_multiple_subs(sub_candidates, message, session_id, context)
 
         if sub_responses:
@@ -354,8 +360,14 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """단일 하위 Agent 선택 및 실행"""
+        print(f"[DELEGATE] _delegate_to_single_sub called", flush=True)
         candidates = self._select_sub_chatbot_hybrid_multi(message)
+        print(f"[DELEGATE] candidates found: {len(candidates)}", flush=True)
+        
         if candidates:
+            sub_chatbot, selection_info, scores = candidates[0]
+            print(f"[DELEGATE] Selected sub: {sub_chatbot.name} ({sub_chatbot.id})", flush=True)
+            print(f"[DELEGATE] Scores: kw={scores['keyword']}, emb={scores['embedding']}, hybrid={scores['hybrid']}", flush=True)
             # 선택 근거 가시화 (디버깅/운영 확인용)
             yield "📊 **하위 후보 점수(상위 3)**\n"
             for i, (cb, _, sc) in enumerate(candidates[:3], 1):
