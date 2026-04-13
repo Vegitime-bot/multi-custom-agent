@@ -782,16 +782,25 @@ class HierarchicalAgentExecutor(AgentExecutor):
         sub_responses: List[Tuple[str, str, str]],
     ) -> str:
         """다중 하위 Agent 응답을 종합하여 하나의 응답 생성"""
+        print(f"[SYNTHESIZE] Starting with {len(sub_responses)} responses", flush=True)
+        
         if not sub_responses:
+            print("[SYNTHESIZE] No responses, returning error", flush=True)
             return "❌ 하위 Agent로부터 응답을 받지 못했습니다."
+
+        print(f"[SYNTHESIZE] Response sources: {[name for _, name, _ in sub_responses]}", flush=True)
+        print(f"[SYNTHESIZE] First response length: {len(sub_responses[0][2]) if sub_responses else 0}", flush=True)
 
         if len(sub_responses) == 1:
             _, name, response = sub_responses[0]
+            print(f"[SYNTHESIZE] Single response from {name}, returning directly", flush=True)
             return f"**[{name}]**\n\n{response}"
 
+        print("[SYNTHESIZE] Building synthesis prompt...", flush=True)
         synthesis_prompt = self._build_synthesis_prompt(parent_context, user_message, sub_responses)
 
         try:
+            print("[SYNTHESIZE] Calling LLM...", flush=True)
             client = get_llm_client()
             messages = [
                 {"role": "system", "content": synthesis_prompt["system"]},
@@ -808,8 +817,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
             synthesized += "\n\n---\n**참고 전문가:** " + ", ".join(
                 [f"[{name}]" for _, name, _ in sub_responses]
             )
+            print(f"[SYNTHESIZE] LLM response length: {len(synthesized)}", flush=True)
             return synthesized
-        except Exception:
+        except Exception as e:
+            print(f"[SYNTHESIZE] LLM error: {e}, using fallback", flush=True)
             return self._fallback_synthesis(sub_responses)
 
     def _build_synthesis_prompt(
