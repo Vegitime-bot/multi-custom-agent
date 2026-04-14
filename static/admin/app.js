@@ -373,9 +373,39 @@ function collapseAllNodes() {
 
 // ===== 사용자 권한 뷰 =====
 let currentUserPermissions = [];
+let currentDBPermissions = [];
+let currentUserTab = 'chatbot';
+
+// 사용자 권한 탭 전환
+function switchUserTab(tab) {
+    currentUserTab = tab;
+    
+    document.querySelectorAll('.user-tab').forEach(t => {
+        t.classList.remove('active', 'bg-primary', 'text-white');
+        t.classList.add('bg-white', 'text-slate-600');
+        if (t.dataset.userTab === tab) {
+            t.classList.add('active', 'bg-primary', 'text-white');
+            t.classList.remove('bg-white', 'text-slate-600');
+        }
+    });
+    
+    document.querySelectorAll('.user-tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    if (tab === 'chatbot') {
+        document.getElementById('chatbotPermissionsContainer').classList.remove('hidden');
+        loadUsers();
+    } else {
+        document.getElementById('dbPermissionsContainer').classList.remove('hidden');
+        loadDBPermissions();
+    }
+}
 
 async function loadUsers() {
     const container = document.getElementById('permissionsContainer');
+    if (!container) return;
+    
     container.innerHTML = `
         <div class="flex justify-center py-20">
             <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
@@ -390,6 +420,178 @@ async function loadUsers() {
         renderUsersList(stats.user_stats);
     } catch (error) {
         container.innerHTML = `<div class="text-error py-10 text-center">로드 실패: ${error.message}</div>`;
+    }
+}
+
+// ===== DB 권한 관리 =====
+async function loadDBPermissions() {
+    const container = document.getElementById('dbPermissionsList');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="flex justify-center py-20">
+            <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('/api/db-permissions/admin/stats');
+        if (!response.ok) throw new Error('DB 권한 API 응답 오류');
+        
+        const stats = await response.json();
+        renderDBUsersList(stats.user_stats || {});
+    } catch (error) {
+        console.error('Error loading DB permissions:', error);
+        container.innerHTML = `
+            <div class="text-center py-20 border-2 border-dashed border-outline-variant rounded-3xl">
+                <div class="text-5xl mb-4">🗄️</div>
+                <h3 class="text-lg font-semibold text-on-surface mb-2">DB 권한 정보 로드 실패</h3>
+                <p class="text-on-surface-variant mb-4">${error.message}</p>
+                <button onclick="loadDBPermissions()" class="px-4 py-2 rounded-xl bg-primary text-white text-sm font-medium hover:opacity-90">
+                    다시 시도
+                </button>
+            </div>
+        `;
+    }
+}
+
+function renderDBUsersList(userStats) {
+    const container = document.getElementById('dbPermissionsList');
+    
+    if (!userStats || Object.keys(userStats).length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-20 border-2 border-dashed border-outline-variant rounded-3xl">
+                <div class="text-6xl mb-4">🗄️</div>
+                <h3 class="text-lg font-semibold text-on-surface mb-2">DB 권한 정보 없음</h3>
+                <p class="text-on-surface-variant mb-4">DB 권한을 추가하여 사용자를 관리하세요.</p>
+                <button onclick="openAddDBPermissionModal()" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary-container hover:opacity-90 transition-opacity flex items-center gap-2">
+                    <span class="material-symbols-outlined text-base">add</span> DB 권한 추가
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    const userListHtml = Object.entries(userStats).map(([knoxId, data]) => `
+        <div class="db-permission-card bg-white rounded-2xl p-5 shadow-sm border border-outline-variant flex items-center justify-between hover:shadow-md transition-shadow" data-knox-id="${knoxId}">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-600/10 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-amber-600">database</span>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-on-surface mb-1">${knoxId}</h4>
+                    <div class="flex gap-2">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-600">접근 가능 ${data.accessible || 0}개</span>
+                        <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">전체 ${data.total || 0}개</span>
+                    </div>
+                </div>
+            </div>
+            <button onclick="viewUserDBPermissions('${knoxId}')" class="px-4 py-2 rounded-xl text-sm font-medium bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-base">visibility</span> 상세 보기
+            </button>
+        </div>
+    `).join('');
+    
+    container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${userListHtml}
+        </div>
+    `;
+}
+
+async function viewUserDBPermissions(knoxId) {
+    try {
+        const response = await fetch(`/api/db-permissions/users/${knoxId}`);
+        if (!response.ok) throw new Error('DB 권한 조회 실패');
+        
+        const data = await response.json();
+        currentDBPermissions = data.permissions || [];
+        
+        const permsHtml = data.permissions?.map(p => `
+            <div class="flex items-center justify-between p-4 rounded-xl ${p.can_access ? 'bg-amber-50 border-l-4 border-amber-500' : 'bg-red-50 border-l-4 border-red-500 opacity-70'}">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-amber-600">database</span>
+                    <div>
+                        <span class="font-medium text-on-surface text-sm">${p.db_id}</span>
+                        <p class="text-xs text-on-surface-variant mt-1">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '-'}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" ${p.can_access ? 'checked' : ''} onchange="updateUserDBPermission('${knoxId}', '${p.db_id}', this.checked)" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                    <button onclick="deleteUserDBPermission('${knoxId}', '${p.db_id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-red-100 text-error hover:bg-error hover:text-white transition-colors">
+                        <span class="material-symbols-outlined text-base">delete</span>
+                    </button>
+                </div>
+            </div>
+        `).join('') || '<p class="text-center py-10 text-on-surface-variant">설정된 DB 권한이 없습니다.</p>';
+        
+        const content = `
+            <div class="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl mb-6">
+                <div class="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white text-xl font-bold">
+                    <span class="material-symbols-outlined">database</span>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-on-surface">${knoxId}</h4>
+                    <p class="text-sm text-on-surface-variant">DB 접근 가능: <strong class="text-amber-600">${data.accessible_count || 0}</strong> / ${data.total || 0}개</p>
+                </div>
+            </div>
+            <div class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                ${permsHtml}
+            </div>
+            <div class="mt-6 pt-4 border-t border-outline-variant">
+                <button onclick="openAddDBPermissionModalForUser('${knoxId}')" class="w-full py-3 rounded-xl text-sm font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined">add</span> DB 권한 추가
+                </button>
+            </div>
+        `;
+        
+        document.getElementById('userDetailTitle').textContent = `${knoxId} - DB 권한 상세`;
+        document.getElementById('userDetailContent').innerHTML = content;
+        document.getElementById('userDetailModal').classList.remove('hidden');
+        document.getElementById('userDetailModal').classList.add('flex');
+        
+    } catch (error) {
+        console.error('Error loading user DB permissions:', error);
+        showToast('DB 권한 조회 실패: ' + error.message, 'error');
+    }
+}
+
+async function updateUserDBPermission(knoxId, dbId, canAccess) {
+    try {
+        const response = await fetch(`/api/db-permissions/${knoxId}/${dbId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ can_access: canAccess })
+        });
+        
+        if (!response.ok) throw new Error('DB 권한 수정 실패');
+        
+        showToast('DB 권한이 수정되었습니다', 'success');
+        viewUserDBPermissions(knoxId);
+        loadDBPermissions();
+    } catch (error) {
+        showToast('DB 권한 수정 실패: ' + error.message, 'error');
+    }
+}
+
+async function deleteUserDBPermission(knoxId, dbId) {
+    if (!confirm(`정말로 ${dbId}에 대한 DB 권한을 삭제하시겠습니까?`)) return;
+    
+    try {
+        const response = await fetch(`/api/db-permissions/${knoxId}/${dbId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('DB 권한 삭제 실패');
+        
+        showToast('DB 권한이 삭제되었습니다', 'success');
+        viewUserDBPermissions(knoxId);
+        loadDBPermissions();
+    } catch (error) {
+        showToast('DB 권한 삭제 실패: ' + error.message, 'error');
     }
 }
 
@@ -722,6 +924,38 @@ async function confirmDelete() {
     } catch (error) {
         showToast('삭제 실패: ' + error.message, 'error');
     }
+}
+
+// ===== DB 권한 모달 =====
+async function openAddDBPermissionModal() {
+    document.getElementById('addPermissionModal').classList.remove('hidden');
+    document.getElementById('addPermissionModal').classList.add('flex');
+    document.getElementById('addPermissionForm').reset();
+    
+    const select = document.getElementById('addChatbotId');
+    select.innerHTML = '<option value="">DB를 선택하세요</option>';
+    
+    // DB 목록 가져오기
+    const dbList = ['db_new', 'db_001', 'db_002', 'db_003', 'db_004', 
+                    'db_hr_policy', 'db_hr_benefit', 'db_hr_overview',
+                    'db_backend', 'db_frontend', 'db_devops', 'db_tech_overview'];
+    
+    dbList.forEach(db => {
+        const option = document.createElement('option');
+        option.value = db;
+        option.textContent = db;
+        select.appendChild(option);
+    });
+    
+    // 폼을 DB 권한 모드로 변경
+    document.getElementById('addPermissionForm').dataset.mode = 'db';
+    document.querySelector('#addPermissionModal h3').textContent = 'DB 권한 추가';
+    document.querySelector('label[for="addChatbotId"]').textContent = 'DB 선택 *';
+}
+
+async function openAddDBPermissionModalForUser(knoxId) {
+    await openAddDBPermissionModal();
+    document.getElementById('addUserId').value = knoxId;
 }
 
 // ===== 권한 추가 모달 =====
