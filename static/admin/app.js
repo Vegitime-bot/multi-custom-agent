@@ -1,5 +1,5 @@
 /**
- * Admin Panel JavaScript - Enhanced
+ * Admin Panel JavaScript - Tailwind CSS Edition
  * 챗봇 관리자 페이지 기능 (계층 뷰, 권한 관리, 통계 대시보드 포함)
  */
 
@@ -27,19 +27,26 @@ document.addEventListener('DOMContentLoaded', () => {
 function switchView(viewName) {
     currentView = viewName;
     
-    // Update nav items
+    // Update nav items - Tailwind 스타일
     document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
+        item.classList.remove('active', 'text-primary', 'font-semibold', 'border-r-4', 'border-primary', 'bg-white/50');
+        item.classList.add('text-slate-500');
         if (item.dataset.view === viewName) {
-            item.classList.add('active');
+            item.classList.add('active', 'text-primary', 'font-semibold', 'border-r-4', 'border-primary', 'bg-white/50');
+            item.classList.remove('text-slate-500');
         }
     });
     
     // Show/hide views
     document.querySelectorAll('.view').forEach(view => {
+        view.classList.add('hidden');
         view.classList.remove('active');
     });
-    document.getElementById(`view-${viewName}`).classList.add('active');
+    const activeView = document.getElementById(`view-${viewName}`);
+    if (activeView) {
+        activeView.classList.remove('hidden');
+        activeView.classList.add('active');
+    }
     
     // Load view-specific data
     if (viewName === 'hierarchy') {
@@ -51,10 +58,14 @@ function switchView(viewName) {
     }
 }
 
-// ===== 챗봘 목록 로드 =====
+// ===== 챗봇 목록 로드 =====
 async function loadChatbots() {
     const grid = document.getElementById('chatbotGrid');
-    grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    grid.innerHTML = `
+        <div class="col-span-full flex justify-center py-20">
+            <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
+        </div>
+    `;
     
     try {
         const response = await fetch('/admin/api/chatbots');
@@ -66,7 +77,13 @@ async function loadChatbots() {
         loadStoreStats();
     } catch (error) {
         console.error('Error loading chatbots:', error);
-        grid.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><h3>로드 실패</h3><p>${error.message}</p></div>`;
+        grid.innerHTML = `
+            <div class="col-span-full text-center py-20">
+                <div class="text-5xl mb-4">⚠️</div>
+                <h3 class="text-lg font-semibold text-on-surface mb-2">로드 실패</h3>
+                <p class="text-on-surface-variant">${error.message}</p>
+            </div>
+        `;
     }
 }
 
@@ -86,7 +103,6 @@ async function loadStats() {
 }
 
 function loadStoreStats() {
-    // Calculate from current data
     const total = chatbots.length;
     const parents = chatbots.filter(c => c.type === 'parent').length;
     const active = chatbots.filter(c => c.active).length;
@@ -96,25 +112,25 @@ function loadStoreStats() {
     document.getElementById('statActive').textContent = active;
 }
 
-// ===== 챗봘 카드 렌더링 =====
+// ===== 챗봇 카드 렌더링 (Tailwind 스타일) =====
 function renderChatbots() {
     const grid = document.getElementById('chatbotGrid');
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const searchTerm = document.getElementById('globalSearchInput').value.toLowerCase();
     
     let filtered = chatbots.filter(cb => {
         if (currentFilter !== 'all' && cb.type !== currentFilter) return false;
         if (searchTerm && !cb.name.toLowerCase().includes(searchTerm) && 
-            !cb.description.toLowerCase().includes(searchTerm) &&
+            !cb.description?.toLowerCase().includes(searchTerm) &&
             !cb.id.toLowerCase().includes(searchTerm)) return false;
         return true;
     });
     
     if (filtered.length === 0) {
         grid.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">🔍</div>
-                <h3>챗봘을 찾을 수 없습니다</h3>
-                <p>검색어를 변경하거나 새 챗봘을 만들어보세요.</p>
+            <div class="col-span-full text-center py-20 border-2 border-dashed border-outline-variant rounded-3xl">
+                <div class="text-6xl mb-4">🔍</div>
+                <h3 class="text-lg font-semibold text-on-surface mb-2">챗봇을 찾을 수 없습니다</h3>
+                <p class="text-on-surface-variant">검색어를 변경하거나 새 챗봇을 만들어보세요.</p>
             </div>
         `;
         return;
@@ -124,8 +140,11 @@ function renderChatbots() {
 }
 
 function createCardHTML(chatbot) {
-    const badgeClass = chatbot.type === 'parent' ? 'badge-parent' : 
-                       chatbot.type === 'child' ? 'badge-child' : 'badge-standalone';
+    const badgeClass = chatbot.type === 'parent' 
+        ? 'bg-gradient-to-r from-tertiary-container/10 to-tertiary/10 text-tertiary-container' 
+        : chatbot.type === 'child' 
+            ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 text-green-600' 
+            : 'bg-slate-100 text-slate-600';
     const badgeText = chatbot.type === 'parent' ? '상위 Agent' : 
                       chatbot.type === 'child' ? '하위 Agent' : '단독';
     
@@ -136,26 +155,38 @@ function createCardHTML(chatbot) {
     if (chatbot.type === 'child' && chatbot.parent) {
         const parent = chatbots.find(c => c.id === chatbot.parent);
         if (parent) {
-            hierarchyInfo = `<div class="hierarchy-info"><span>🔗 ${parent.name}</span></div>`;
+            hierarchyInfo = `<div class="text-xs text-on-surface-variant mb-3 flex items-center gap-1"><span class="material-symbols-outlined text-sm">link</span> ${parent.name}</div>`;
         }
     } else if (chatbot.type === 'parent' && chatbot.sub_chatbots?.length > 0) {
-        hierarchyInfo = `<div class="hierarchy-info"><span>👥 하위 ${chatbot.sub_chatbots.length}개</span></div>`;
+        hierarchyInfo = `<div class="text-xs text-on-surface-variant mb-3 flex items-center gap-1"><span class="material-symbols-outlined text-sm">group</span> 하위 ${chatbot.sub_chatbots.length}개</div>`;
     }
     
-    const dbTags = chatbot.db_ids?.map(db => `<span class="db-tag">${db}</span>`).join('') || '';
+    const dbTags = chatbot.db_ids?.map(db => 
+        `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/5 text-primary">${db}</span>`
+    ).join('') || '';
     
     return `
-        <div class="chatbot-card" data-id="${chatbot.id}">
-            <span class="card-badge ${badgeClass}">${badgeText}</span>
-            <div class="card-icon">${icon}</div>
-            <h3 class="card-title">${chatbot.name}</h3>
-            <p class="card-desc">${chatbot.description || '설명 없음'}</p>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer group" data-id="${chatbot.id}">
+            <div class="flex items-start justify-between mb-4">
+                <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-3xl text-white shadow-md">
+                    ${icon}
+                </div>
+                <span class="px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}">${badgeText}</span>
+            </div>
+            <h3 class="text-lg font-semibold text-on-surface font-headline mb-2">${chatbot.name}</h3>
+            <p class="text-sm text-on-surface-variant mb-3 line-clamp-2">${chatbot.description || '설명 없음'}</p>
             ${hierarchyInfo}
-            <div class="card-db-tags">${dbTags}</div>
-            <div class="card-actions">
-                <button class="btn-icon" onclick="openDetailModal('${chatbot.id}')" title="상세 보기">👁️</button>
-                <button class="btn-icon btn-chat" onclick="startChat('${chatbot.id}')" title="채팅하기">💬</button>
-                <button class="btn-icon btn-delete" onclick="openDeleteModal('${chatbot.id}', '${chatbot.name}')" title="삭제">🗑️</button>
+            <div class="flex flex-wrap gap-2 mb-4">${dbTags}</div>
+            <div class="flex gap-2 pt-4 border-t border-outline-variant">
+                <button onclick="openDetailModal('${chatbot.id}')" class="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-sm font-medium text-on-surface-variant hover:text-on-surface transition-colors" title="상세 보기">
+                    <span class="material-symbols-outlined text-base">visibility</span> 보기
+                </button>
+                <button onclick="startChat('${chatbot.id}')" class="w-10 h-10 flex items-center justify-center rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors" title="채팅하기">
+                    <span class="material-symbols-outlined text-lg">chat</span>
+                </button>
+                <button onclick="openDeleteModal('${chatbot.id}', '${chatbot.name}')" class="w-10 h-10 flex items-center justify-center rounded-xl bg-error/10 text-error hover:bg-error hover:text-white transition-colors" title="삭제">
+                    <span class="material-symbols-outlined text-lg">delete</span>
+                </button>
             </div>
         </div>
     `;
@@ -165,112 +196,130 @@ function createCardHTML(chatbot) {
 function filterChatbots(type) {
     currentFilter = type;
     
-    document.querySelectorAll('.filter-tabs .tab').forEach(tab => {
-        tab.classList.remove('active');
-        if (tab.dataset.filter === type) tab.classList.add('active');
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active', 'bg-primary', 'text-white');
+        tab.classList.add('bg-white', 'text-slate-600');
+        if (tab.dataset.filter === type) {
+            tab.classList.add('active', 'bg-primary', 'text-white');
+            tab.classList.remove('bg-white', 'text-slate-600');
+        }
     });
     
     renderChatbots();
 }
 
-// ===== 계층 뷰 (3-tier 지원) =====
+// ===== 계층 뷰 (3-tier 지원) - Tailwind 스타일 =====
 async function loadHierarchy() {
     const container = document.getElementById('hierarchyContainer');
-    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    container.innerHTML = `
+        <div class="flex justify-center py-20">
+            <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
+        </div>
+    `;
     
     try {
         const response = await fetch('/admin/api/chatbots');
         const bots = await response.json();
         
         // Build 3-tier hierarchy tree
-        // Level 0: Root nodes (no parent)
         const roots = bots.filter(b => !b.parent_id || b.level === 0);
         
         const html = roots.map(root => renderHierarchyTree(root, bots, 0)).join('');
         
-        // Add standalone section (not part of hierarchy)
         const standalone = bots.filter(b => b.level === undefined || (b.level === 0 && !b.parent_id && !roots.includes(b)));
         const standaloneHtml = standalone.map(s => `
-            <div class="hierarchy-node standalone" data-level="0">
-                <span class="icon">💬</span>
-                <span class="name">${s.name}</span>
-                <span class="id">${s.id}</span>
-                <span class="badge">단독</span>
+            <div class="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-50 border border-outline-variant">
+                <span class="material-symbols-outlined text-slate-400">chat</span>
+                <span class="flex-1 font-medium text-sm">${s.name}</span>
+                <span class="text-xs text-on-surface-variant font-mono">${s.id}</span>
+                <span class="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500">단독</span>
             </div>
         `).join('');
         
         container.innerHTML = `
-            <div class="hierarchy-header">
-                <h3 class="section-title">🌳 3-Tier Agent 계층 구조</h3>
-                <div class="hierarchy-controls">
-                    <button class="btn btn-sm btn-secondary" onclick="expandAllNodes()">전체 펼치기</button>
-                    <button class="btn btn-sm btn-secondary" onclick="collapseAllNodes()">전체 접기</button>
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-on-surface font-headline">🌳 3-Tier Agent 계층 구조</h3>
+                <div class="flex gap-2">
+                    <button onclick="expandAllNodes()" class="px-4 py-2 rounded-xl text-sm font-medium bg-white border border-outline-variant hover:bg-surface-container-low transition-colors flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-base">expand_more</span> 펼치기
+                    </button>
+                    <button onclick="collapseAllNodes()" class="px-4 py-2 rounded-xl text-sm font-medium bg-white border border-outline-variant hover:bg-surface-container-low transition-colors flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-base">chevron_right</span> 접기
+                    </button>
                 </div>
             </div>
-            <div class="hierarchy-trees">
-                ${html || '<div class="empty-state">Root Agent가 없습니다</div>'}
+            <div class="space-y-1 mb-8">
+                ${html || '<div class="text-center py-10 text-on-surface-variant">Root Agent가 없습니다</div>'}
             </div>
             
-            <h3 class="section-title">💬 단독 챗봘</h3>
-            <div class="hierarchy-standalone-list">
-                ${standaloneHtml || '<div class="hierarchy-empty">단독 챗봘 없음</div>'}
+            <h3 class="text-lg font-bold text-on-surface font-headline mb-4">💬 단독 챗봘</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                ${standaloneHtml || '<div class="col-span-full text-center py-10 text-on-surface-variant">단독 챗봘 없음</div>'}
             </div>
             
-            <div class="hierarchy-legend">
-                <span class="legend-item"><span class="legend-color root"></span> Root (Level 0)</span>
-                <span class="legend-item"><span class="legend-color parent"></span> Parent (Level 1)</span>
-                <span class="legend-item"><span class="legend-color child"></span> Child (Level 2+)</span>
-                <span class="legend-item"><span class="legend-color leaf"></span> Leaf (하위 없음)</span>
+            <div class="mt-8 flex flex-wrap gap-4 p-4 bg-surface-container-low rounded-xl">
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="w-4 h-4 rounded bg-amber-400"></div>
+                    <span class="text-on-surface-variant">Root (Level 0)</span>
+                </div>
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="w-4 h-4 rounded bg-tertiary-container"></div>
+                    <span class="text-on-surface-variant">Parent (Level 1)</span>
+                </div>
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="w-4 h-4 rounded bg-primary"></div>
+                    <span class="text-on-surface-variant">Child (Level 2+)</span>
+                </div>
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="w-4 h-4 rounded bg-green-500"></div>
+                    <span class="text-on-surface-variant">Leaf (하위 없음)</span>
+                </div>
             </div>
         `;
         
-        // Initialize expand/collapse state
         initHierarchyInteractions();
     } catch (error) {
-        container.innerHTML = `<div class="error">로드 실패: ${error.message}</div>`;
+        container.innerHTML = `<div class="text-error py-10 text-center">로드 실패: ${error.message}</div>`;
     }
 }
 
 function renderHierarchyTree(node, allBots, depth = 0) {
-    // Get children using level/parent_id
     const children = allBots.filter(b => b.parent_id === node.id);
     const isLeaf = children.length === 0;
     
-    // Determine node type based on level
-    let nodeClass = 'child';
-    let icon = '👤';
+    let bgClass = 'bg-white border-l-4 border-primary';
+    let icon = 'person';
     if (node.level === 0) {
-        nodeClass = 'root';
-        icon = '🏢';
+        bgClass = 'bg-gradient-to-r from-amber-100 to-amber-50 border-l-4 border-amber-400';
+        icon = 'account_balance';
     } else if (node.level === 1) {
-        nodeClass = 'parent';
-        icon = '🤖';
+        bgClass = 'bg-gradient-to-r from-tertiary-container/10 to-tertiary/5 border-l-4 border-tertiary-container';
+        icon = 'smart_toy';
     }
     
     if (isLeaf) {
-        nodeClass += ' leaf';
-        icon = '👤';
+        icon = 'person';
+        bgClass = bgClass.replace('border-l-4', 'border-l-4 border-green-500');
     }
     
     const hasChildren = children.length > 0;
-    const expandIcon = hasChildren ? '<span class="expand-icon">▼</span>' : '';
+    const expandIcon = hasChildren ? 'expand_more' : '';
     
-    // Recursively render children
     const childrenHtml = hasChildren ? `
-        <div class="hierarchy-children" data-depth="${depth + 1}">
+        <div class="hierarchy-children pl-6 border-l-2 border-dashed border-outline-variant ml-3 space-y-1" data-depth="${depth + 1}">
             ${children.map(child => renderHierarchyTree(child, allBots, depth + 1)).join('')}
         </div>
     ` : '';
     
     return `
         <div class="hierarchy-branch" data-level="${node.level || 0}" data-id="${node.id}">
-            <div class="hierarchy-node ${nodeClass}" onclick="toggleNode('${node.id}')" style="padding-left: ${depth * 24}px;">
-                ${expandIcon}
-                <span class="icon">${icon}</span>
-                <span class="name">${node.name}</span>
-                <span class="id">${node.id}</span>
-                <span class="badge">Lv.${node.level !== undefined ? node.level : '?'}</span>
-                ${isLeaf ? '<span class="badge badge-leaf">Leaf</span>' : `<span class="badge badge-count">하위 ${children.length}개</span>`}
+            <div class="flex items-center gap-3 px-4 py-3 rounded-xl ${bgClass} cursor-pointer hover:shadow-sm transition-shadow" onclick="toggleNode('${node.id}')">
+                ${hasChildren ? `<span class="material-symbols-outlined text-on-surface-variant transform transition-transform" id="expand-${node.id}">expand_more</span>` : '<span class="w-6"></span>'}
+                <span class="material-symbols-outlined ${node.level === 0 ? 'text-amber-600' : node.level === 1 ? 'text-tertiary-container' : 'text-green-600'}">${icon}</span>
+                <span class="flex-1 font-semibold text-sm text-on-surface">${node.name}</span>
+                <span class="text-xs text-on-surface-variant font-mono">${node.id}</span>
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-white/80">Lv.${node.level !== undefined ? node.level : '?'}</span>
+                ${isLeaf ? '<span class="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-600">Leaf</span>' : `<span class="px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary">하위 ${children.length}개</span>`}
             </div>
             ${childrenHtml}
         </div>
@@ -278,7 +327,6 @@ function renderHierarchyTree(node, allBots, depth = 0) {
 }
 
 function initHierarchyInteractions() {
-    // All nodes expanded by default
     document.querySelectorAll('.hierarchy-children').forEach(el => {
         el.style.display = 'block';
     });
@@ -289,13 +337,13 @@ function toggleNode(nodeId) {
     if (!branch) return;
     
     const children = branch.querySelector(':scope > .hierarchy-children');
-    const expandIcon = branch.querySelector(':scope > .hierarchy-node > .expand-icon');
+    const expandIcon = document.getElementById(`expand-${nodeId}`);
     
     if (children) {
         const isVisible = children.style.display !== 'none';
         children.style.display = isVisible ? 'none' : 'block';
         if (expandIcon) {
-            expandIcon.textContent = isVisible ? '▶' : '▼';
+            expandIcon.style.transform = isVisible ? 'rotate(-90deg)' : 'rotate(0deg)';
         }
     }
 }
@@ -304,20 +352,19 @@ function expandAllNodes() {
     document.querySelectorAll('.hierarchy-children').forEach(el => {
         el.style.display = 'block';
     });
-    document.querySelectorAll('.expand-icon').forEach(el => {
-        el.textContent = '▼';
+    document.querySelectorAll('[id^="expand-"]').forEach(el => {
+        el.style.transform = 'rotate(0deg)';
     });
 }
 
 function collapseAllNodes() {
-    // Keep only root level visible
     document.querySelectorAll('.hierarchy-children').forEach(el => {
         if (parseInt(el.dataset.depth) > 0) {
             el.style.display = 'none';
         }
     });
-    document.querySelectorAll('.expand-icon').forEach(el => {
-        el.textContent = '▶';
+    document.querySelectorAll('[id^="expand-"]').forEach(el => {
+        el.style.transform = 'rotate(-90deg)';
     });
 }
 
@@ -326,19 +373,20 @@ let currentUserPermissions = [];
 
 async function loadUsers() {
     const container = document.getElementById('permissionsContainer');
-    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    container.innerHTML = `
+        <div class="flex justify-center py-20">
+            <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
+        </div>
+    `;
     
     try {
-        // Get stats for users
         const response = await fetch('/api/permissions/admin/stats');
         const stats = await response.json();
         
-        // Store user data globally for filtering
         window.userPermissionsData = stats.user_stats;
-        
         renderUsersList(stats.user_stats);
     } catch (error) {
-        container.innerHTML = `<div class="error">로드 실패: ${error.message}</div>`;
+        container.innerHTML = `<div class="text-error py-10 text-center">로드 실패: ${error.message}</div>`;
     }
 }
 
@@ -347,32 +395,32 @@ function renderUsersList(userStats) {
     
     if (!userStats || Object.keys(userStats).length === 0) {
         container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">👥</div>
-                <h3>사용자 권한 정보 없음</h3>
-                <p>권한을 추가하여 사용자를 관리하세요.</p>
+            <div class="text-center py-20 border-2 border-dashed border-outline-variant rounded-3xl">
+                <div class="text-6xl mb-4">👥</div>
+                <h3 class="text-lg font-semibold text-on-surface mb-2">사용자 권한 정보 없음</h3>
+                <p class="text-on-surface-variant">권한을 추가하여 사용자를 관리하세요.</p>
             </div>
         `;
         return;
     }
     
     const userListHtml = Object.entries(userStats).map(([knoxId, data]) => `
-        <div class="user-permission-card" data-knox-id="${knoxId}">
-            <div class="user-info">
-                <h4>${knoxId}</h4>
-                <div class="user-stats">
-                    <span class="badge badge-success">접근 가능 ${data.accessible}개</span>
-                    <span class="badge badge-secondary">전체 ${data.total}개</span>
+        <div class="user-permission-card bg-white rounded-2xl p-5 shadow-sm border border-outline-variant flex items-center justify-between hover:shadow-md transition-shadow" data-knox-id="${knoxId}">
+            <div>
+                <h4 class="font-semibold text-on-surface mb-1">${knoxId}</h4>
+                <div class="flex gap-2">
+                    <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-600">접근 가능 ${data.accessible}개</span>
+                    <span class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">전체 ${data.total}개</span>
                 </div>
             </div>
-            <div class="user-actions">
-                <button class="btn btn-sm btn-secondary" onclick="viewUserPermissions('${knoxId}')">상세 보기</button>
-            </div>
+            <button onclick="viewUserPermissions('${knoxId}')" class="px-4 py-2 rounded-xl text-sm font-medium bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface transition-colors">
+                상세 보기
+            </button>
         </div>
     `).join('');
     
     container.innerHTML = `
-        <div class="users-list">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             ${userListHtml}
         </div>
     `;
@@ -384,11 +432,7 @@ function filterUsers() {
     
     userCards.forEach(card => {
         const knoxId = card.getAttribute('data-knox-id') || '';
-        if (knoxId.toLowerCase().includes(searchTerm)) {
-            card.style.display = 'flex';
-        } else {
-            card.style.display = 'none';
-        }
+        card.style.display = knoxId.toLowerCase().includes(searchTerm) ? 'flex' : 'none';
     });
 }
 
@@ -400,42 +444,43 @@ async function viewUserPermissions(knoxId) {
         const data = await response.json();
         currentUserPermissions = data.permissions;
         
-        // Build modal content
         const permsHtml = data.permissions.map(p => `
-            <div class="permission-item ${p.can_access ? 'granted' : 'denied'}">
-                <div class="permission-info">
-                    <span class="chatbot-name">${p.chatbot_id}</span>
-                    <span class="permission-date">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '-'}</span>
+            <div class="flex items-center justify-between p-4 rounded-xl ${p.can_access ? 'bg-green-50 border-l-4 border-green-500' : 'bg-red-50 border-l-4 border-red-500 opacity-70'}">
+                <div>
+                    <span class="font-medium text-on-surface text-sm">${p.chatbot_id}</span>
+                    <p class="text-xs text-on-surface-variant mt-1">${p.created_at ? new Date(p.created_at).toLocaleDateString() : '-'}</p>
                 </div>
-                <div class="permission-actions">
-                    <label class="toggle-switch-small">
-                        <input type="checkbox" ${p.can_access ? 'checked' : ''} 
-                               onchange="updateUserPermission('${knoxId}', '${p.chatbot_id}', this.checked)">
-                        <span class="slider"></span>
+                <div class="flex items-center gap-3">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" ${p.can_access ? 'checked' : ''} onchange="updateUserPermission('${knoxId}', '${p.chatbot_id}', this.checked)" class="sr-only peer">
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                     </label>
-                    <button class="btn-icon btn-delete" onclick="deleteUserPermission('${knoxId}', '${p.chatbot_id}')" title="권한 삭제">🗑️</button>
+                    <button onclick="deleteUserPermission('${knoxId}', '${p.chatbot_id}')" class="w-8 h-8 flex items-center justify-center rounded-lg bg-red-100 text-error hover:bg-error hover:text-white transition-colors">
+                        <span class="material-symbols-outlined text-base">delete</span>
+                    </button>
                 </div>
             </div>
         `).join('');
         
         const content = `
-            <div class="user-detail-header">
-                <div class="user-profile">
-                    <span class="user-avatar">👤</span>
-                    <div class="user-info">
-                        <h4>${knoxId}</h4>
-                        <p>접근 가능: <strong>${data.accessible_count}</strong> / ${data.total}개 챗봇</p>
-                    </div>
+            <div class="flex items-center gap-4 p-4 bg-surface-container-low rounded-2xl mb-6">
+                <div class="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center text-white text-xl font-bold">
+                    ${knoxId.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                    <h4 class="font-semibold text-on-surface">${knoxId}</h4>
+                    <p class="text-sm text-on-surface-variant">접근 가능: <strong class="text-primary">${data.accessible_count}</strong> / ${data.total}개 챗봇</p>
                 </div>
             </div>
-            <div class="permissions-detail-list">
-                ${permsHtml || '<p class="empty">설정된 권한이 없습니다.</p>'}
+            <div class="space-y-3 max-h-80 overflow-y-auto custom-scrollbar">
+                ${permsHtml || '<p class="text-center py-10 text-on-surface-variant">설정된 권한이 없습니다.</p>'}
             </div>
         `;
         
         document.getElementById('userDetailTitle').textContent = `${knoxId} - 권한 상세`;
         document.getElementById('userDetailContent').innerHTML = content;
-        document.getElementById('userDetailModal').classList.add('active');
+        document.getElementById('userDetailModal').classList.remove('hidden');
+        document.getElementById('userDetailModal').classList.add('flex');
         
     } catch (error) {
         console.error('Error loading user permissions:', error);
@@ -454,9 +499,7 @@ async function updateUserPermission(knoxId, chatbotId, canAccess) {
         if (!response.ok) throw new Error('수정 실패');
         
         showToast('권한이 수정되었습니다', 'success');
-        // Refresh user detail view
         viewUserPermissions(knoxId);
-        // Refresh user list
         loadUsers();
     } catch (error) {
         showToast('권한 수정 실패: ' + error.message, 'error');
@@ -474,9 +517,7 @@ async function deleteUserPermission(knoxId, chatbotId) {
         if (!response.ok) throw new Error('삭제 실패');
         
         showToast('권한이 삭제되었습니다', 'success');
-        // Refresh user detail view
         viewUserPermissions(knoxId);
-        // Refresh user list
         loadUsers();
     } catch (error) {
         showToast('권한 삭제 실패: ' + error.message, 'error');
@@ -484,81 +525,102 @@ async function deleteUserPermission(knoxId, chatbotId) {
 }
 
 function closeUserDetailModal() {
-    document.getElementById('userDetailModal').classList.remove('active');
+    document.getElementById('userDetailModal').classList.add('hidden');
+    document.getElementById('userDetailModal').classList.remove('flex');
 }
 
 // ===== 통계 대시보드 =====
 async function loadStatsDashboard() {
     const container = document.getElementById('statsDashboard');
-    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    container.innerHTML = `
+        <div class="flex justify-center py-20">
+            <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
+        </div>
+    `;
     
     try {
-        // Chatbot stats
         const chatbotRes = await fetch('/admin/api/stats');
         const chatbotStats = await chatbotRes.json();
         
-        // Permission stats
         const permRes = await fetch('/api/permissions/admin/stats');
         const permStats = await permRes.json();
         
+        const totalUsers = Object.keys(permStats.user_stats || {}).length;
+        
         container.innerHTML = `
-            <div class="stats-grid">
-                <div class="stat-card large">
-                    <div class="stat-icon">🤖</div>
-                    <div class="stat-value">${chatbotStats.total}</div>
-                    <div class="stat-label">전체 챗봘</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant text-center">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/10 to-primary-container/10 flex items-center justify-center mx-auto mb-3">
+                        <span class="material-symbols-outlined text-2xl text-primary">smart_toy</span>
+                    </div>
+                    <div class="text-3xl font-bold text-on-surface font-headline">${chatbotStats.total}</div>
+                    <div class="text-sm text-on-surface-variant mt-1">전체 챗봇</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">${chatbotStats.parents}</div>
-                    <div class="stat-label">상위 Agent</div>
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant text-center">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-tertiary-container/10 to-tertiary/10 flex items-center justify-center mx-auto mb-3">
+                        <span class="material-symbols-outlined text-2xl text-tertiary-container">account_tree</span>
+                    </div>
+                    <div class="text-3xl font-bold text-on-surface font-headline">${chatbotStats.parents}</div>
+                    <div class="text-sm text-on-surface-variant mt-1">상위 Agent</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">${chatbotStats.total - chatbotStats.parents}</div>
-                    <div class="stat-label">하위/단독</div>
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant text-center">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/10 to-green-600/10 flex items-center justify-center mx-auto mb-3">
+                        <span class="material-symbols-outlined text-2xl text-green-600">person</span>
+                    </div>
+                    <div class="text-3xl font-bold text-on-surface font-headline">${totalUsers}</div>
+                    <div class="text-sm text-on-surface-variant mt-1">사용자</div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-value">${permStats.unique_users}</div>
-                    <div class="stat-label">사용자</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">${permStats.total_permissions}</div>
-                    <div class="stat-label">권한 설정</div>
+                <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant text-center">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-600/10 flex items-center justify-center mx-auto mb-3">
+                        <span class="material-symbols-outlined text-2xl text-amber-600">key</span>
+                    </div>
+                    <div class="text-3xl font-bold text-on-surface font-headline">${permStats.total_permissions || 0}</div>
+                    <div class="text-sm text-on-surface-variant mt-1">권한 설정</div>
                 </div>
             </div>
             
-            <div class="stats-sections">
-                <div class="stats-section">
-                    <h3>사용자별 챗봘 접근</h3>
-                    <div class="stats-bar-list">
-                        ${Object.entries(permStats.user_stats).map(([user, data]) => `
-                            <div class="stats-bar-item">
-                                <span class="label">${user}</span>
-                                <div class="bar-container">
-                                    <div class="bar" style="width: ${(data.accessible / data.total * 100) || 0}%">
-                                        ${data.accessible}/${data.total}
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant">
+                <h3 class="text-lg font-bold text-on-surface font-headline mb-6">사용자별 챗봘 접근</h3>
+                <div class="space-y-4">
+                    ${Object.entries(permStats.user_stats || {}).map(([user, data]) => {
+                        const percentage = data.total > 0 ? (data.accessible / data.total * 100) : 0;
+                        return `
+                            <div class="flex items-center gap-4">
+                                <span class="w-32 text-sm font-medium text-on-surface truncate">${user}</span>
+                                <div class="flex-1">
+                                    <div class="h-8 bg-surface-container-low rounded-full overflow-hidden">
+                                        <div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full flex items-center justify-end pr-3 text-white text-xs font-medium transition-all duration-500" style="width: ${percentage}%">
+                                            ${percentage > 20 ? `${data.accessible}/${data.total}` : ''}
+                                        </div>
                                     </div>
                                 </div>
+                                <span class="w-16 text-right text-sm text-on-surface-variant">${data.accessible}/${data.total}</span>
                             </div>
-                        `).join('')}
-                    </div>
+                        `;
+                    }).join('') || '<p class="text-center py-10 text-on-surface-variant">사용자 데이터가 없습니다.</p>'}
                 </div>
             </div>
         `;
     } catch (error) {
-        container.innerHTML = `<div class="error">로드 실패: ${error.message}</div>`;
+        container.innerHTML = `<div class="text-error py-10 text-center">로드 실패: ${error.message}</div>`;
     }
 }
 
 // ===== 모달 관리 =====
 function openCreateModal() {
-    document.getElementById('chatbotModal').classList.add('active');
-    document.getElementById('modalTitle').textContent = '새 챗봘 만들기';
+    const modal = document.getElementById('chatbotModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    document.getElementById('modalTitle').textContent = '새 챗봇 만들기';
     document.getElementById('chatbotForm').reset();
     document.getElementById('chatbotId').disabled = false;
+    document.getElementById('dbTags').innerHTML = '';
 }
 
 function closeModal() {
-    document.getElementById('chatbotModal').classList.remove('active');
+    const modal = document.getElementById('chatbotModal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
 }
 
 function openDetailModal(chatbotId) {
@@ -566,49 +628,57 @@ function openDetailModal(chatbotId) {
     const chatbot = chatbots.find(c => c.id === chatbotId);
     if (!chatbot) return;
     
+    const badgeClass = chatbot.type === 'parent' 
+        ? 'bg-tertiary-container/10 text-tertiary-container' 
+        : chatbot.type === 'child' 
+            ? 'bg-green-100 text-green-600' 
+            : 'bg-slate-100 text-slate-600';
+    const badgeText = chatbot.type === 'parent' ? '상위 Agent' : 
+                      chatbot.type === 'child' ? '하위 Agent' : '단독';
+    
     const content = `
-        <div class="detail-section">
-            <div class="detail-header">
-                <span class="badge ${chatbot.type === 'parent' ? 'badge-parent' : chatbot.type === 'child' ? 'badge-child' : 'badge-standalone'}">
-                    ${chatbot.type === 'parent' ? '상위 Agent' : chatbot.type === 'child' ? '하위 Agent' : '단독'}
-                </span>
+        <div class="space-y-4">
+            <div class="flex items-center gap-3 mb-6">
+                <span class="px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}">${badgeText}</span>
             </div>
-            <div class="detail-row">
-                <label>ID:</label>
-                <code>${chatbot.id}</code>
+            <div class="flex py-4 border-b border-outline-variant">
+                <label class="w-28 text-sm font-medium text-on-surface-variant">ID</label>
+                <code class="flex-1 text-sm font-mono bg-surface-container-low px-3 py-1.5 rounded-lg">${chatbot.id}</code>
             </div>
-            <div class="detail-row">
-                <label>이름:</label>
-                <span>${chatbot.name}</span>
+            <div class="flex py-4 border-b border-outline-variant">
+                <label class="w-28 text-sm font-medium text-on-surface-variant">이름</label>
+                <span class="flex-1 text-sm text-on-surface">${chatbot.name}</span>
             </div>
-            <div class="detail-row">
-                <label>설명:</label>
-                <p>${chatbot.description || '없음'}</p>
+            <div class="flex py-4 border-b border-outline-variant">
+                <label class="w-28 text-sm font-medium text-on-surface-variant">설명</label>
+                <span class="flex-1 text-sm text-on-surface">${chatbot.description || '없음'}</span>
             </div>
             ${chatbot.parent ? `
-            <div class="detail-row">
-                <label>상위 Agent:</label>
-                <span>${chatbot.parent}</span>
+            <div class="flex py-4 border-b border-outline-variant">
+                <label class="w-28 text-sm font-medium text-on-surface-variant">상위 Agent</label>
+                <span class="flex-1 text-sm text-on-surface">${chatbot.parent}</span>
             </div>` : ''}
             ${chatbot.sub_chatbots?.length ? `
-            <div class="detail-row">
-                <label>하위 Agent:</label>
-                <span>${chatbot.sub_chatbots.join(', ')}</span>
+            <div class="flex py-4 border-b border-outline-variant">
+                <label class="w-28 text-sm font-medium text-on-surface-variant">하위 Agent</label>
+                <span class="flex-1 text-sm text-on-surface">${chatbot.sub_chatbots.join(', ')}</span>
             </div>` : ''}
-            <div class="detail-row">
-                <label>연결된 DB:</label>
-                <div>${chatbot.db_ids?.map(db => `<span class="tag">${db}</span>`).join(' ') || '없음'}</div>
+            <div class="flex py-4">
+                <label class="w-28 text-sm font-medium text-on-surface-variant">연결된 DB</label>
+                <div class="flex-1 flex flex-wrap gap-2">${chatbot.db_ids?.map(db => `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/5 text-primary">${db}</span>`).join(' ') || '없음'}</div>
             </div>
         </div>
     `;
     
     document.getElementById('detailTitle').textContent = chatbot.name;
     document.getElementById('detailContent').innerHTML = content;
-    document.getElementById('detailModal').classList.add('active');
+    document.getElementById('detailModal').classList.remove('hidden');
+    document.getElementById('detailModal').classList.add('flex');
 }
 
 function closeDetailModal() {
-    document.getElementById('detailModal').classList.remove('active');
+    document.getElementById('detailModal').classList.add('hidden');
+    document.getElementById('detailModal').classList.remove('flex');
     detailChatbotId = null;
 }
 
@@ -622,11 +692,13 @@ function startChatFromDetail() {
 function openDeleteModal(chatbotId, name) {
     deleteTargetId = chatbotId;
     document.getElementById('deleteChatbotName').textContent = name;
-    document.getElementById('deleteModal').classList.add('active');
+    document.getElementById('deleteModal').classList.remove('hidden');
+    document.getElementById('deleteModal').classList.add('flex');
 }
 
 function closeDeleteModal() {
-    document.getElementById('deleteModal').classList.remove('active');
+    document.getElementById('deleteModal').classList.add('hidden');
+    document.getElementById('deleteModal').classList.remove('flex');
     deleteTargetId = null;
 }
 
@@ -649,37 +721,14 @@ async function confirmDelete() {
     }
 }
 
-// ===== 일괄 권한 모달 =====
-async function openBulkPermissionModal() {
-    const list = document.getElementById('bulkChatbotList');
-    list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-    document.getElementById('bulkPermissionModal').classList.add('active');
-    
-    try {
-        const response = await fetch('/admin/api/chatbots');
-        const bots = await response.json();
-        
-        list.innerHTML = bots.map(bot => `
-            <label class="chatbot-checkbox">
-                <input type="checkbox" value="${bot.id}" name="bulkChatbots">
-                <span class="checkmark"></span>
-                <span class="name">${bot.name}</span>
-                <span class="id">${bot.id}</span>
-            </label>
-        `).join('');
-    } catch (error) {
-        list.innerHTML = '<div class="error">로드 실패</div>';
-    }
-}
-
 // ===== 권한 추가 모달 =====
 async function openAddPermissionModal() {
-    document.getElementById('addPermissionModal').classList.add('active');
+    document.getElementById('addPermissionModal').classList.remove('hidden');
+    document.getElementById('addPermissionModal').classList.add('flex');
     document.getElementById('addPermissionForm').reset();
     
-    // 챗봘 목록 로드
     const select = document.getElementById('addChatbotId');
-    select.innerHTML = '<option value="">챗봘을 선택하세요</option>';
+    select.innerHTML = '<option value="">챗봇을 선택하세요</option>';
     
     try {
         const response = await fetch('/admin/api/chatbots');
@@ -698,7 +747,8 @@ async function openAddPermissionModal() {
 }
 
 function closeAddPermissionModal() {
-    document.getElementById('addPermissionModal').classList.remove('active');
+    document.getElementById('addPermissionModal').classList.add('hidden');
+    document.getElementById('addPermissionModal').classList.remove('flex');
 }
 
 async function saveAddPermission(event) {
@@ -710,7 +760,7 @@ async function saveAddPermission(event) {
     const canAccess = canAccessRadio ? canAccessRadio.value === 'true' : true;
     
     if (!knoxId || !chatbotId) {
-        showToast('사용자 ID와 챗봘을 모두 선택하세요', 'error');
+        showToast('사용자 ID와 챗봇을 모두 선택하세요', 'error');
         return;
     }
     
@@ -732,47 +782,9 @@ async function saveAddPermission(event) {
         
         closeAddPermissionModal();
         showToast('권한이 추가되었습니다', 'success');
-        // Refresh user list
         loadUsers();
     } catch (error) {
         showToast('권한 추가 실패: ' + error.message, 'error');
-    }
-}
-
-function closeBulkPermissionModal() {
-    document.getElementById('bulkPermissionModal')?.classList.remove('active');
-}
-
-async function saveBulkPermissions(event) {
-    event.preventDefault();
-    
-    const knoxId = document.getElementById('bulkUserId')?.value;
-    const chatbotIds = Array.from(document.querySelectorAll('input[name="bulkChatbots"]:checked')).map(cb => cb.value);
-    const canAccess = document.getElementById('bulkAccessType')?.value === 'true';
-    
-    if (!chatbotIds.length) {
-        showToast('최소 하나의 챗봘을 선택하세요', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/permissions/bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                knox_id: knoxId,
-                chatbot_ids: chatbotIds,
-                can_access: canAccess
-            })
-        });
-        
-        if (!response.ok) throw new Error('Failed');
-        
-        const result = await response.json();
-        closeBulkPermissionModal();
-        showToast(`${result.success_count}/${result.total}개 권한 설정 완료`, 'success');
-    } catch (error) {
-        showToast('저장 실패: ' + error.message, 'error');
     }
 }
 
@@ -786,7 +798,7 @@ async function saveChatbot(event) {
         description: document.getElementById('chatbotDesc').value,
         type: document.getElementById('chatbotType').value,
         system_prompt: document.getElementById('systemPrompt').value,
-        db_ids: document.getElementById('dbInput').value.split(',').map(s => s.trim()).filter(s => s),
+        db_ids: Array.from(document.querySelectorAll('#dbTags .db-tag')).map(tag => tag.textContent.replace('×', '').trim()),
         active: true
     };
     
@@ -834,9 +846,9 @@ function onTypeChange() {
     const parentGroup = document.getElementById('parentSelectGroup');
     
     if (type === 'child') {
-        parentGroup.style.display = 'block';
+        parentGroup.classList.remove('hidden');
     } else {
-        parentGroup.style.display = 'none';
+        parentGroup.classList.add('hidden');
     }
 }
 
@@ -846,13 +858,14 @@ function startChat(chatbotId) {
 
 function setupEventListeners() {
     // Search input
-    document.getElementById('searchInput')?.addEventListener('input', renderChatbots);
+    document.getElementById('globalSearchInput')?.addEventListener('input', renderChatbots);
     
     // Close modals on outside click
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
-                modal.classList.remove('active');
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
             }
         });
     });
@@ -863,9 +876,9 @@ function setupEventListeners() {
         dbInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ',') {
                 e.preventDefault();
-                const value = dbInput.value.trim();
-                if (value && value !== ',') {
-                    addDbTag(value.replace(',', ''));
+                const value = dbInput.value.trim().replace(',', '');
+                if (value) {
+                    addDbTag(value);
                     dbInput.value = '';
                 }
             }
@@ -876,8 +889,8 @@ function setupEventListeners() {
 function addDbTag(dbId) {
     const container = document.getElementById('dbTags');
     const tag = document.createElement('span');
-    tag.className = 'db-tag active';
-    tag.innerHTML = `${dbId} <button onclick="this.parentElement.remove()">×</button>`;
+    tag.className = 'db-tag inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-primary/10 text-primary';
+    tag.innerHTML = `${dbId} <button onclick="this.parentElement.remove()" class="hover:text-primary-container"><span class="material-symbols-outlined text-base">close</span></button>`;
     container.appendChild(tag);
 }
 
@@ -885,9 +898,24 @@ function addDbTag(dbId) {
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
-    toast.className = `toast ${type} show`;
+    toast.className = 'fixed bottom-6 right-6 px-6 py-4 rounded-2xl text-white font-semibold shadow-2xl transform transition-all duration-300 z-[2000]';
+    
+    if (type === 'success') {
+        toast.classList.add('bg-gradient-to-r', 'from-green-500', 'to-green-600');
+    } else if (type === 'error') {
+        toast.classList.add('bg-gradient-to-r', 'from-error', 'to-red-600');
+    } else {
+        toast.classList.add('bg-gradient-to-r', 'from-primary', 'to-primary-container');
+    }
+    
+    // Show
+    requestAnimationFrame(() => {
+        toast.style.transform = 'translateY(0)';
+        toast.style.opacity = '1';
+    });
     
     setTimeout(() => {
-        toast.classList.remove('show');
+        toast.style.transform = 'translateY(20px)';
+        toast.style.opacity = '0';
     }, 3000);
 }
