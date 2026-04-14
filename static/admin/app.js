@@ -115,7 +115,10 @@ function loadStoreStats() {
 // ===== 챗봇 카드 렌더링 (Tailwind 스타일) =====
 function renderChatbots() {
     const grid = document.getElementById('chatbotGrid');
-    const searchTerm = document.getElementById('globalSearchInput').value.toLowerCase();
+    if (!grid) return;
+    
+    const searchInput = document.getElementById('globalSearchInput');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase() : '';
     
     let filtered = chatbots.filter(cb => {
         if (currentFilter !== 'all' && cb.type !== currentFilter) return false;
