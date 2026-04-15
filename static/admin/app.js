@@ -68,7 +68,7 @@ async function loadChatbots() {
     `;
     
     try {
-        const response = await fetch('/admin/api/chatbots');
+        const response = await fetch('/main/api/chatbots');
         if (!response.ok) throw new Error('Failed to load');
         
         chatbots = await response.json();
@@ -90,7 +90,7 @@ async function loadChatbots() {
 // ===== 통계 로드 =====
 async function loadStats() {
     try {
-        const response = await fetch('/admin/api/stats');
+        const response = await fetch('/main/api/stats');
         if (!response.ok) return;
         
         const stats = await response.json();
@@ -221,7 +221,7 @@ async function loadHierarchy() {
     `;
     
     try {
-        const response = await fetch('/admin/api/chatbots');
+        const response = await fetch('/main/api/chatbots');
         const bots = await response.json();
         
         // Build 3-tier hierarchy tree
@@ -744,7 +744,7 @@ async function loadStatsDashboard() {
     `;
     
     try {
-        const chatbotRes = await fetch('/admin/api/stats');
+        const chatbotRes = await fetch('/main/api/stats');
         const chatbotStats = await chatbotRes.json();
         
         const permRes = await fetch('/api/permissions/admin/stats');
@@ -787,22 +787,27 @@ async function loadStatsDashboard() {
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant">
                 <h3 class="text-lg font-bold text-on-surface font-headline mb-6">사용자별 챗봘 접근</h3>
                 <div class="space-y-4">
-                    ${Object.entries(permStats.user_stats || {}).map(([user, data]) => {
-                        const percentage = data.total > 0 ? (data.accessible / data.total * 100) : 0;
-                        return `
-                            <div class="flex items-center gap-4">
-                                <span class="w-32 text-sm font-medium text-on-surface truncate">${user}</span>
-                                <div class="flex-1">
-                                    <div class="h-8 bg-surface-container-low rounded-full overflow-hidden">
-                                        <div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full flex items-center justify-end pr-3 text-white text-xs font-medium transition-all duration-500" style="width: ${percentage}%">
-                                            ${percentage > 20 ? `${data.accessible}/${data.total}` : ''}
+                    ${(() => {
+                        const userEntries = Object.entries(permStats.user_stats || {});
+                        const maxTotal = Math.max(...userEntries.map(([_, d]) => d.total || 0), 1);
+                        return userEntries.map(([user, data]) => {
+                            const fillPercentage = data.total > 0 ? (data.accessible / data.total * 100) : 0;
+                            const relativeWidth = (data.accessible / maxTotal * 100);
+                            return `
+                                <div class="flex items-center gap-4">
+                                    <span class="w-32 text-sm font-medium text-on-surface truncate">${user}</span>
+                                    <div class="flex-1">
+                                        <div class="h-8 bg-surface-container-low rounded-full overflow-hidden">
+                                            <div class="h-full bg-gradient-to-r from-primary to-primary-container rounded-full flex items-center justify-end pr-3 text-white text-xs font-medium transition-all duration-500" style="width: ${relativeWidth}%">
+                                                ${relativeWidth > 15 ? `${data.accessible}/${data.total}` : ''}
+                                            </div>
                                         </div>
                                     </div>
+                                    <span class="w-16 text-right text-sm text-on-surface-variant">${data.accessible}/${data.total}</span>
                                 </div>
-                                <span class="w-16 text-right text-sm text-on-surface-variant">${data.accessible}/${data.total}</span>
-                            </div>
-                        `;
-                    }).join('') || '<p class="text-center py-10 text-on-surface-variant">사용자 데이터가 없습니다.</p>'}
+                            `;
+                        }).join('') || '<p class="text-center py-10 text-on-surface-variant">사용자 데이터가 없습니다.</p>';
+                    })()}
                 </div>
             </div>
         `;
@@ -911,7 +916,7 @@ async function confirmDelete() {
     if (!deleteTargetId) return;
     
     try {
-        const response = await fetch(`/admin/api/chatbots/${deleteTargetId}`, {
+        const response = await fetch(`/main/api/chatbots/${deleteTargetId}`, {
             method: 'DELETE'
         });
         
@@ -968,7 +973,7 @@ async function openAddPermissionModal() {
     select.innerHTML = '<option value="">챗봇을 선택하세요</option>';
     
     try {
-        const response = await fetch('/admin/api/chatbots');
+        const response = await fetch('/main/api/chatbots');
         const bots = await response.json();
         
         bots.forEach(bot => {
@@ -1044,7 +1049,7 @@ async function saveChatbot(event) {
     }
     
     try {
-        const response = await fetch('/admin/api/chatbots', {
+        const response = await fetch('/main/api/chatbots', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)

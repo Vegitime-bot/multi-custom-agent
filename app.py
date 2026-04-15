@@ -93,12 +93,12 @@ def create_app() -> FastAPI:
         async def root_with_sso_check(request: Request):
             """
             루트 경로: SSO 인증 상태에 따라 분기
-            - 인증됨: /admin으로 리다이렉트 (관리자 페이지)
+            - 인증됨: /main으로 리다이렉트 (관리자 페이지)
             - 미인증: /sso로 리다이렉트 (SSO 로그인)
             """
             try:
                 if request.session.get('sso'):
-                    return RedirectResponse(url="/admin")
+                    return RedirectResponse(url="/main")
                 return RedirectResponse(url="/sso")
             except Exception:
                 return RedirectResponse(url="/sso")

@@ -98,6 +98,12 @@
 <header>
   <h1>Multi Custom Agent</h1>
   <select id="chatbot-selector"></select>
+  <div id="multi-sub-toggle" style="margin-left: 12px; display: none; align-items: center; gap: 8px; font-size: 0.85rem;">
+    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+      <input type="checkbox" id="multi-sub-checkbox" style="cursor: pointer;">
+      <span>모든 하위 챗봇에 질문</span>
+    </label>
+  </div>
 </header>
 
 <div id="chat-container"></div>
@@ -113,20 +119,23 @@
   const BASE = window.location.origin;
   let sessionId = null;
   let selectedChatbotId = null;
+  let chatbots = [];  // 챗봇 목록 저장
 
   const chatContainer = document.getElementById('chat-container');
   const userInput     = document.getElementById('user-input');
   const sendBtn       = document.getElementById('send-btn');
   const selector      = document.getElementById('chatbot-selector');
   const sessionInfo   = document.getElementById('session-info');
+  const multiSubToggle = document.getElementById('multi-sub-toggle');
+  const multiSubCheckbox = document.getElementById('multi-sub-checkbox');
 
   // ── 챗봇 목록 로드 ──────────────────────────────────────────────
   async function loadChatbots() {
     try {
       const res = await fetch(`${BASE}/api/chatbots`);
-      const bots = await res.json();
+      chatbots = await res.json();  // 전역 변수에 저장
       selector.innerHTML = '<option value="">챗봇 선택...</option>';
-      bots.forEach(b => {
+      chatbots.forEach(b => {
         const opt = document.createElement('option');
         opt.value = b.id;
         const typeLabel = b.sub_chatbots?.length > 0 ? 'Parent' : (b.parent_id ? 'Child' : 'Standalone');
@@ -143,8 +152,21 @@
     sessionId = null;
     chatContainer.innerHTML = '';
     updateSessionInfo();
+    
+    // 챗봇에 sub_chatbots가 있으면 multi_sub_execution 토글 표시
     if (selectedChatbotId) {
+      const selectedBot = chatbots.find(b => b.id === selectedChatbotId);
+      if (selectedBot && selectedBot.sub_chatbots && selectedBot.sub_chatbots.length > 0) {
+        multiSubToggle.style.display = 'flex';
+        // 초기값은 챗봇 설정에서 가져오기
+        multiSubCheckbox.checked = selectedBot.policy?.multi_sub_execution || false;
+      } else {
+        multiSubToggle.style.display = 'none';
+        multiSubCheckbox.checked = false;
+      }
       addSystemMsg(`챗봇 "${selector.options[selector.selectedIndex].text}" 선택됨`);
+    } else {
+      multiSubToggle.style.display = 'none';
     }
   });
 
@@ -265,6 +287,7 @@
           chatbot_id: selectedChatbotId,
           message: text,
           session_id: sessionId,
+          multi_sub_execution: multiSubCheckbox.checked,  // 사용자 선택값 전달
         }),
       });
 
@@ -309,16 +332,11 @@
         // stream: true로 incomplete UTF-8 sequences 처리
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
-        // 마지막 라인은 incomplete일 수 있으므로 버퍼에 유지
-        buffer = lines.pop();
+
+        // 마지막 라인은 incomplete일 수 있으므로 보관
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('event: done')) {
-            sendBtn.disabled = false;
-            continue;
-          }
-          if (line.startsWith('event: error')) continue;
-          if (line.startsWith('event: session_id')) continue;
           if (line.startsWith('data: ')) {
             try {
               const raw = line.slice(6).trim();
@@ -327,29 +345,25 @@
               if (typeof chunk === 'string') {
                 fullText += chunk;
                 assistantDiv.innerHTML = parseMarkdownTable(fullText);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+              } else if (chunk.session_id) {
+                sessionId = chunk.session_id;
+                updateSessionInfo();
               }
             } catch {}
           }
         }
       }
-
-      // session_id 추출 (별도 이벤트 파싱)
-      // session_id는 sse_event(session.session_id, event="session_id") 로 전송됨
-      // 위 루프에서 처리 안 됐다면 buffer에 남아 있을 수 있으므로 재시도
-      const sessionMatch = (buffer + '').match(/event: session_id\ndata: "([^"]+)"/);
-      if (sessionMatch) {
-        sessionId = sessionMatch[1];
-        updateSessionInfo();
-      }
-
     } catch (e) {
-      assistantDiv.textContent = `네트워크 오류: ${e.message}`;
+      assistantDiv.textContent = '오류: ' + e.message;
+      assistantDiv.classList.remove('typing-indicator');
     } finally {
       sendBtn.disabled = false;
       userInput.focus();
     }
   }
+
+  // ── 초기화 ───────────────────────────────────────────────────────
+  loadChatbots();
 
   sendBtn.addEventListener('click', sendMessage);
   userInput.addEventListener('keydown', e => {
@@ -358,24 +372,7 @@
       sendMessage();
     }
   });
-
-  // ── 초기화 ───────────────────────────────────────────────────────
-  loadChatbots().then(() => {
-    // URL 파라미터로부터 챗봘 ID 확인
-    const urlParams = new URLSearchParams(window.location.search);
-    const chatbotId = urlParams.get('chatbot');
-    
-    if (chatbotId) {
-      // 해당 ID가 존재하면 선택
-      const option = Array.from(selector.options).find(opt => opt.value === chatbotId);
-      if (option) {
-        selector.value = chatbotId;
-        selector.dispatchEvent(new Event('change'));
-      } else {
-        addSystemMsg(`챗봘 "${chatbotId}"를 찾을 수 없습니다.`);
-      }
-    }
-  });
 </script>
+
 </body>
 </html>

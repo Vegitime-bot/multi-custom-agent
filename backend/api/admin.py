@@ -21,18 +21,18 @@ def get_chatbot_manager(request: Request) -> ChatbotManager:
 
 
 # ── 관리자 페이지 HTML ────────────────────────────────────────────
-@router.get("/admin")
+@router.get("/main")
 async def admin_page():
     return FileResponse(STATIC_DIR / "index.html")
 
 
-@router.get("/admin/")
+@router.get("/main/")
 async def admin_page_slash():
     return FileResponse(STATIC_DIR / "index.html")
 
 
 # ── 챗봇 목록 ────────────────────────────────────────────────────
-@router.get("/admin/api/chatbots")
+@router.get("/main/api/chatbots")
 async def list_chatbots(
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
 ) -> List[dict]:
@@ -82,7 +82,7 @@ def _find_parent(chatbot_id: str, all_defs) -> Optional[str]:
 
 
 # ── 챗봇 생성 ────────────────────────────────────────────────────
-@router.post("/admin/api/chatbots")
+@router.post("/main/api/chatbots")
 async def create_chatbot(
     request: dict,
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
@@ -163,7 +163,7 @@ async def create_chatbot(
 
 
 # ── 챗봇 수정 ────────────────────────────────────────────────────
-@router.put("/admin/api/chatbots/{chatbot_id}")
+@router.put("/main/api/chatbots/{chatbot_id}")
 async def update_chatbot(
     chatbot_id: str,
     request: dict,
@@ -235,7 +235,7 @@ async def update_chatbot(
 
 
 # ── 챗봘 삭제 ────────────────────────────────────────────────────
-@router.delete("/admin/api/chatbots/{chatbot_id}")
+@router.delete("/main/api/chatbots/{chatbot_id}")
 async def delete_chatbot(
     chatbot_id: str,
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
@@ -267,7 +267,7 @@ async def delete_chatbot(
 
 
 # ── 통계 ──────────────────────────────────────────────────────────
-@router.get("/admin/api/stats")
+@router.get("/main/api/stats")
 async def get_stats(
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
 ) -> dict:
