@@ -303,7 +303,7 @@ async def update_chatbot(
     return {"status": "success", "id": chatbot_id}
 
 
-# ── 챗봘 삭제 ────────────────────────────────────────────────────
+# ── 챗봇 삭제 ────────────────────────────────────────────────────
 @router.delete("/main/api/chatbots/{chatbot_id}")
 async def delete_chatbot(
     chatbot_id: str,
@@ -311,7 +311,7 @@ async def delete_chatbot(
 ) -> dict:
     chatbots_dir = chatbot_mgr._dir
 
-    # 다른 챗봘의 sub_chatbots에서 참조 제거
+    # 다른 챗봇의 sub_chatbots에서 참조 제거
     for other_file in chatbots_dir.glob("*.json"):
         data = json.loads(other_file.read_text(encoding="utf-8"))
         if "sub_chatbots" in data:
@@ -329,7 +329,7 @@ async def delete_chatbot(
     if not chatbot_mgr.delete(chatbot_id):
         raise HTTPException(404, f"챗봇 '{chatbot_id}'를 찾을 수 없습니다")
 
-    # 메모리 상태 완전 갱신 (다른 챗봘들의 sub_chatbots 참조 업데이트)
+    # 메모리 상태 완전 갱신 (다른 챗봇들의 sub_chatbots 참조 업데이트)
     chatbot_mgr.reload()
 
     return {"status": "success", "message": "삭제되었습니다"}

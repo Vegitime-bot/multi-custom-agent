@@ -9,6 +9,8 @@ let currentFilter = 'all';
 let currentView = 'store';
 let deleteTargetId = null;
 let detailChatbotId = null;
+let currentUser = null;  // 현재 사용자 정보
+let isAdmin = false;     // 관리자 여부
 
 // DB 목록 (mock)
 const availableDBs = ['db_new', 'db_001', 'db_002', 'db_003', 'db_004', 
@@ -17,11 +19,132 @@ const availableDBs = ['db_new', 'db_001', 'db_002', 'db_003', 'db_004',
                       'db_rtl_verilog', 'db_rtl_synthesis'];
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadCurrentUser();  // 사용자 정보 먼저 로드
     loadChatbots();
     loadStats();
     setupEventListeners();
 });
+
+// 현재 사용자 정보 로드
+async function loadCurrentUser() {
+    try {
+        const response = await fetch('/main/api/me');
+        if (response.ok) {
+            currentUser = await response.json();
+            isAdmin = currentUser.is_admin || false;
+            console.log('Current user:', currentUser, 'Is admin:', isAdmin);
+            // 관리자면 챗봇 추가 버튼 표시
+            const addBtn = document.getElementById('addChatbotBtn');
+            if (addBtn && isAdmin) {
+                addBtn.classList.remove('hidden');
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load user info:', error);
+    }
+}
+
+// ===== 챗봇 추가 모달 =====
+function openAddChatbotModal() {
+    document.getElementById('addChatbotModal').classList.remove('hidden');
+    document.getElementById('addChatbotModal').classList.add('flex');
+    
+    // Parent 목록 로드
+    const parentSelect = document.getElementById('newChatbotParent');
+    parentSelect.innerHTML = '<option value="">상위 Agent를 선택하세요</option>';
+    const parents = chatbots.filter(c => c.sub_chatbots?.length > 0 || c.type === 'parent');
+    parents.forEach(parent => {
+        const opt = document.createElement('option');
+        opt.value = parent.id;
+        opt.textContent = `${parent.name} (${parent.id})`;
+        parentSelect.appendChild(opt);
+    });
+}
+
+function closeAddChatbotModal() {
+    document.getElementById('addChatbotModal').classList.add('hidden');
+    document.getElementById('addChatbotModal').classList.remove('flex');
+    document.getElementById('addChatbotForm').reset();
+    document.getElementById('parentSelectContainer').classList.add('hidden');
+}
+
+// 챗봘 유형 변경 시 상위 선택 표시
+function setupAddChatbotListeners() {
+    const typeInputs = document.querySelectorAll('input[name="newChatbotType"]');
+    typeInputs.forEach(input => {
+        input.addEventListener('change', () => {
+            const parentContainer = document.getElementById('parentSelectContainer');
+            if (input.value === 'child') {
+                parentContainer.classList.remove('hidden');
+            } else {
+                parentContainer.classList.add('hidden');
+            }
+        });
+    });
+}
+
+async function saveNewChatbot(event) {
+    event.preventDefault();
+    
+    const id = document.getElementById('newChatbotId').value.trim();
+    const name = document.getElementById('newChatbotName').value.trim();
+    const description = document.getElementById('newChatbotDesc').value.trim();
+    const type = document.querySelector('input[name="newChatbotType"]:checked').value;
+    const parentId = document.getElementById('newChatbotParent').value;
+    const systemPrompt = document.getElementById('newChatbotPrompt').value.trim();
+    
+    if (!id || !name) {
+        showToast('ID와 이름은 필수입니다', 'error');
+        return;
+    }
+    
+    const chatbotData = {
+        id: id,
+        name: name,
+        description: description,
+        active: true,
+        db_ids: [],
+        sub_chatbots: [],
+        type: type,
+        system_prompt: systemPrompt,
+        policy: {
+            temperature: 0.3,
+            max_tokens: 1024,
+            stream: true,
+            supported_modes: ["tool", "agent"],
+            default_mode: "agent",
+            max_messages: 20
+        }
+    };
+    
+    if (type === 'child' && parentId) {
+        chatbotData.parent_id = parentId;
+        chatbotData.parent = parentId;
+    }
+    
+    try {
+        const response = await fetch('/main/api/chatbots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(chatbotData)
+        });
+        
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || '챗봇 생성 실패');
+        }
+        
+        showToast('챗봇이 생성되었습니다', 'success');
+        closeAddChatbotModal();
+        await loadChatbots();
+    } catch (error) {
+        showToast('챗봇 생성 실패: ' + error.message, 'error');
+    }
+}
+
+// 초기화 시 리스너 설정
+setTimeout(setupAddChatbotListeners, 100);
 
 // ===== 뷰 전환 =====
 function switchView(viewName) {
@@ -267,9 +390,9 @@ async function loadHierarchy() {
                 ${html || '<div class="text-center py-10 text-on-surface-variant">Root Agent가 없습니다</div>'}
             </div>
             
-            <h3 class="text-lg font-bold text-on-surface font-headline mb-4">💬 단독 챗봘</h3>
+            <h3 class="text-lg font-bold text-on-surface font-headline mb-4">💬 단독 챗봇</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                ${standaloneHtml || '<div class="col-span-full text-center py-10 text-on-surface-variant">단독 챗봘 없음</div>'}
+                ${standaloneHtml || '<div class="col-span-full text-center py-10 text-on-surface-variant">단독 챗봇 없음</div>'}
             </div>
             
             <div class="mt-8 flex flex-wrap gap-4 p-4 bg-surface-container-low rounded-xl">
@@ -797,7 +920,7 @@ async function loadStatsDashboard() {
             </div>
             
             <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant">
-                <h3 class="text-lg font-bold text-on-surface font-headline mb-6">사용자별 챗봘 접근</h3>
+                <h3 class="text-lg font-bold text-on-surface font-headline mb-6">사용자별 챗봇 접근</h3>
                 <div class="space-y-4">
                     ${(() => {
                         const userEntries = Object.entries(permStats.user_stats || {});
@@ -883,12 +1006,13 @@ function openDetailModal(chatbotId) {
             ${chatbot.sub_chatbots?.length ? `
             <div class="flex py-4 border-b border-outline-variant">
                 <label class="w-28 text-sm font-medium text-on-surface-variant">하위 Agent</label>
-                <span class="flex-1 text-sm text-on-surface">${chatbot.sub_chatbots.join(', ')}</span>
+                <span class="flex-1 text-sm text-on-surface">${chatbot.sub_chatbots.map(sub => typeof sub === 'object' ? sub.id : sub).join(', ')}</span>
             </div>` : ''}
             <div class="flex py-4 items-start">
                 <label class="w-28 text-sm font-medium text-on-surface-variant pt-1">연결된 DB</label>
                 <div class="flex-1">
                     <div class="flex flex-wrap gap-2 mb-3" id="detailDbList">${chatbot.db_ids?.map(db => `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/5 text-primary">${db}</span>`).join(' ') || '<span class="text-sm text-slate-400">없음</span>'}</div>
+                    ${isAdmin ? `
                     <button onclick="loadDBSelector('${chatbot.id}')" class="px-4 py-2 rounded-xl text-sm font-medium bg-surface-container-low hover:bg-surface-container text-primary transition-colors flex items-center gap-2">
                         <span class="material-symbols-outlined text-sm">edit</span> DB 관리
                     </button>
@@ -903,7 +1027,7 @@ function openDetailModal(chatbotId) {
                                 <button onclick="closeDBSelector()" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">취소</button>
                             </div>
                         </div>
-                    </div>
+                    </div>` : ''}
                 </div>
             </div>
         </div>
@@ -962,11 +1086,11 @@ async function saveChatbotDBs(chatbotId) {
     const selectedDBs = Array.from(checkboxes).map(cb => cb.value);
     
     try {
-        // 챗봘 정보 가져오기
+        // 챗봇 정보 가져오기
         const chatbot = chatbots.find(c => c.id === chatbotId);
         if (!chatbot) throw new Error('챗봇을 찾을 수 없습니다');
         
-        // 수정된 챗봘 데이터 준비
+        // 수정된 챗봇 데이터 준비
         const updateData = {
             id: chatbotId,
             name: chatbot.name,
@@ -992,7 +1116,7 @@ async function saveChatbotDBs(chatbotId) {
         // 상세 모달 새로고침
         openDetailModal(chatbotId);
         
-        // 챗봘 목록 새로고침
+        // 챗봇 목록 새로고침
         await loadChatbots();
     } catch (error) {
         console.error('DB 저장 실패:', error);
@@ -1033,7 +1157,7 @@ async function confirmDelete() {
         closeDeleteModal();
         loadChatbots();
         loadStats();
-        showToast('챗봘이 삭제되었습니다', 'success');
+        showToast('챗봇이 삭제되었습니다', 'success');
     } catch (error) {
         showToast('삭제 실패: ' + error.message, 'error');
     }
@@ -1092,7 +1216,7 @@ async function openAddPermissionModal() {
         });
     } catch (error) {
         console.error('Error loading chatbots:', error);
-        select.innerHTML = '<option value="">챗봘 목록 로드 실패</option>';
+        select.innerHTML = '<option value="">챗봇 목록 로드 실패</option>';
     }
 }
 
@@ -1138,7 +1262,7 @@ async function saveAddPermission(event) {
     }
 }
 
-// ===== 챗봘 저장 =====
+// ===== 챗봇 저장 =====
 async function saveChatbot(event) {
     event.preventDefault();
     
@@ -1171,7 +1295,7 @@ async function saveChatbot(event) {
         closeModal();
         loadChatbots();
         loadStats();
-        showToast('챗봘이 생성되었습니다', 'success');
+        showToast('챗봇이 생성되었습니다', 'success');
     } catch (error) {
         showToast('저장 실패: ' + error.message, 'error');
     }

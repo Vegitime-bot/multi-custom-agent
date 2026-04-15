@@ -51,7 +51,7 @@ function switchView(viewName) {
     }
 }
 
-// ===== 챗봘 목록 로드 =====
+// ===== 챗봇 목록 로드 =====
 async function loadChatbots() {
     const grid = document.getElementById('chatbotGrid');
     grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
@@ -96,7 +96,7 @@ function loadStoreStats() {
     document.getElementById('statActive').textContent = active;
 }
 
-// ===== 챗봘 카드 렌더링 =====
+// ===== 챗봇 카드 렌더링 =====
 function renderChatbots() {
     const grid = document.getElementById('chatbotGrid');
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -113,8 +113,8 @@ function renderChatbots() {
         grid.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">🔍</div>
-                <h3>챗봘을 찾을 수 없습니다</h3>
-                <p>검색어를 변경하거나 새 챗봘을 만들어보세요.</p>
+                <h3>챗봇을 찾을 수 없습니다</h3>
+                <p>검색어를 변경하거나 새 챗봇을 만들어보세요.</p>
             </div>
         `;
         return;
@@ -211,9 +211,9 @@ async function loadHierarchy() {
                 ${html || '<div class="empty-state">Root Agent가 없습니다</div>'}
             </div>
             
-            <h3 class="section-title">💬 단독 챗봘</h3>
+            <h3 class="section-title">💬 단독 챗봇</h3>
             <div class="hierarchy-standalone-list">
-                ${standaloneHtml || '<div class="hierarchy-empty">단독 챗봘 없음</div>'}
+                ${standaloneHtml || '<div class="hierarchy-empty">단독 챗봇 없음</div>'}
             </div>
             
             <div class="hierarchy-legend">
@@ -506,7 +506,7 @@ async function loadStatsDashboard() {
                 <div class="stat-card large">
                     <div class="stat-icon">🤖</div>
                     <div class="stat-value">${chatbotStats.total}</div>
-                    <div class="stat-label">전체 챗봘</div>
+                    <div class="stat-label">전체 챗봇</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-value">${chatbotStats.parents}</div>
@@ -528,7 +528,7 @@ async function loadStatsDashboard() {
             
             <div class="stats-sections">
                 <div class="stats-section">
-                    <h3>사용자별 챗봘 접근</h3>
+                    <h3>사용자별 챗봇 접근</h3>
                     <div class="stats-bar-list">
                         ${Object.entries(permStats.user_stats).map(([user, data]) => `
                             <div class="stats-bar-item">
@@ -552,7 +552,7 @@ async function loadStatsDashboard() {
 // ===== 모달 관리 =====
 function openCreateModal() {
     document.getElementById('chatbotModal').classList.add('active');
-    document.getElementById('modalTitle').textContent = '새 챗봘 만들기';
+    document.getElementById('modalTitle').textContent = '새 챗봇 만들기';
     document.getElementById('chatbotForm').reset();
     document.getElementById('chatbotId').disabled = false;
 }
@@ -643,7 +643,7 @@ async function confirmDelete() {
         closeDeleteModal();
         loadChatbots();
         loadStats();
-        showToast('챗봘이 삭제되었습니다', 'success');
+        showToast('챗봇이 삭제되었습니다', 'success');
     } catch (error) {
         showToast('삭제 실패: ' + error.message, 'error');
     }
@@ -677,9 +677,9 @@ async function openAddPermissionModal() {
     document.getElementById('addPermissionModal').classList.add('active');
     document.getElementById('addPermissionForm').reset();
     
-    // 챗봘 목록 로드
+    // 챗봇 목록 로드
     const select = document.getElementById('addChatbotId');
-    select.innerHTML = '<option value="">챗봘을 선택하세요</option>';
+    select.innerHTML = '<option value="">챗봇을 선택하세요</option>';
     
     try {
         const response = await fetch('/admin/api/chatbots');
@@ -693,7 +693,7 @@ async function openAddPermissionModal() {
         });
     } catch (error) {
         console.error('Error loading chatbots:', error);
-        select.innerHTML = '<option value="">챗봘 목록 로드 실패</option>';
+        select.innerHTML = '<option value="">챗봇 목록 로드 실패</option>';
     }
 }
 
@@ -710,7 +710,7 @@ async function saveAddPermission(event) {
     const canAccess = canAccessRadio ? canAccessRadio.value === 'true' : true;
     
     if (!knoxId || !chatbotId) {
-        showToast('사용자 ID와 챗봘을 모두 선택하세요', 'error');
+        showToast('사용자 ID와 챗봇을 모두 선택하세요', 'error');
         return;
     }
     
@@ -751,7 +751,7 @@ async function saveBulkPermissions(event) {
     const canAccess = document.getElementById('bulkAccessType')?.value === 'true';
     
     if (!chatbotIds.length) {
-        showToast('최소 하나의 챗봘을 선택하세요', 'error');
+        showToast('최소 하나의 챗봇을 선택하세요', 'error');
         return;
     }
     
@@ -776,7 +776,7 @@ async function saveBulkPermissions(event) {
     }
 }
 
-// ===== 챗봘 저장 =====
+// ===== 챗봇 저장 =====
 async function saveChatbot(event) {
     event.preventDefault();
     
@@ -809,7 +809,7 @@ async function saveChatbot(event) {
         closeModal();
         loadChatbots();
         loadStats();
-        showToast('챗봘이 생성되었습니다', 'success');
+        showToast('챗봇이 생성되었습니다', 'success');
     } catch (error) {
         showToast('저장 실패: ' + error.message, 'error');
     }

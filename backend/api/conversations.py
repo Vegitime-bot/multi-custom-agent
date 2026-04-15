@@ -76,7 +76,7 @@ async def get_chatbot_conversations(
     limit: int = Query(default=100, le=1000),
     repo: ConversationRepository = Depends(get_conv_repo),
 ):
-    """챗봘별 대화 내역 조회"""
+    """챗봇별 대화 내역 조회"""
     logs = repo.get_by_chatbot(chatbot_id, limit)
     return [_to_response(log) for log in logs]
 

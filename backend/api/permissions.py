@@ -183,7 +183,7 @@ async def bulk_create_permissions(
     data: BulkPermissionRequest,
     repo: PermissionRepository = Depends(get_perm_repo),
 ):
-    """여러 챗봘에 대해 일괄 권한 설정"""
+    """여러 챗봇에 대해 일괄 권한 설정"""
     success_count = 0
     failed_count = 0
     errors = []
@@ -247,7 +247,7 @@ async def check_permission(
     chatbot_id: str,
     repo: PermissionRepository = Depends(get_perm_repo),
 ):
-    """특정 사용자-챗봘 권한 확인"""
+    """특정 사용자-챗봇 권한 확인"""
     has_access = repo.check_access(knox_id, chatbot_id)
     return {
         "knox_id": knox_id,

@@ -361,7 +361,7 @@
 
   // ── 초기화 ───────────────────────────────────────────────────────
   loadChatbots().then(() => {
-    // URL 파라미터로부터 챗봘 ID 확인
+    // URL 파라미터로부터 챗봇 ID 확인
     const urlParams = new URLSearchParams(window.location.search);
     const chatbotId = urlParams.get('chatbot');
     
@@ -372,7 +372,7 @@
         selector.value = chatbotId;
         selector.dispatchEvent(new Event('change'));
       } else {
-        addSystemMsg(`챗봘 "${chatbotId}"를 찾을 수 없습니다.`);
+        addSystemMsg(`챗봇 "${chatbotId}"를 찾을 수 없습니다.`);
       }
     }
   });

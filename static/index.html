@@ -91,6 +91,54 @@
     }
 
     .typing-indicator { color: #999; font-style: italic; }
+
+    /* 토글 스위치 스타일 */
+    .toggle-switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      gap: 10px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: relative;
+      width: 52px;
+      height: 28px;
+      background: #ccc;
+      border-radius: 28px;
+      transition: 0.3s;
+      flex-shrink: 0;
+    }
+    .toggle-slider:before {
+      content: "";
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: #1a73e8;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+    .toggle-label {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #fff;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -98,10 +146,11 @@
 <header>
   <h1>Multi Custom Agent</h1>
   <select id="chatbot-selector"></select>
-  <div id="multi-sub-toggle" style="margin-left: 12px; display: none; align-items: center; gap: 8px; font-size: 0.85rem;">
-    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
-      <input type="checkbox" id="multi-sub-checkbox" style="cursor: pointer;">
-      <span>모든 하위 챗봇에 질문</span>
+  <div id="multi-sub-toggle" style="margin-left: 12px; display: none; align-items: center;">
+    <label class="toggle-switch">
+      <input type="checkbox" id="multi-sub-checkbox">
+      <span class="toggle-slider"></span>
+      <span class="toggle-label">모든 하위 챗봇에 질문</span>
     </label>
   </div>
 </header>
@@ -129,7 +178,7 @@
   const multiSubToggle = document.getElementById('multi-sub-toggle');
   const multiSubCheckbox = document.getElementById('multi-sub-checkbox');
 
-  // ── URL 파라미터에서 챗봘 ID 가져오기 ───────────────────────────
+  // ── URL 파라미터에서 챗봇 ID 가져오기 ───────────────────────────
   function getUrlParam(name) {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get(name);
@@ -145,7 +194,7 @@
     window.history.replaceState({}, '', url);
   }
 
-  // ── 챗봘 목록 로드 ──────────────────────────────────────────────
+  // ── 챗봇 목록 로드 ──────────────────────────────────────────────
   async function loadChatbots() {
     try {
       const res = await fetch(`${BASE}/api/chatbots`);
@@ -159,7 +208,7 @@
         selector.appendChild(opt);
       });
       
-      // URL 파라미터에서 챗봘 ID 확인하고 자동 선택
+      // URL 파라미터에서 챗봇 ID 확인하고 자동 선택
       const urlChatbotId = getUrlParam('chatbot');
       if (urlChatbotId && chatbots.find(b => b.id === urlChatbotId)) {
         selector.value = urlChatbotId;

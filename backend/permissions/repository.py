@@ -43,12 +43,12 @@ class UserChatbotAccess(Base):
 class PermissionRepository(ABC):
     @abstractmethod
     def get_user_permissions(self, knox_id: str) -> List[dict]:
-        """사용자의 모든 챗봘 권한 조회"""
+        """사용자의 모든 챗봇 권한 조회"""
         pass
 
     @abstractmethod
     def check_access(self, knox_id: str, chatbot_id: str) -> bool:
-        """특정 챗봘 접근 권한 확인"""
+        """특정 챗봇 접근 권한 확인"""
         pass
 
     @abstractmethod
@@ -63,7 +63,7 @@ class PermissionRepository(ABC):
 
     @abstractmethod
     def get_chatbot_users(self, chatbot_id: str) -> List[dict]:
-        """특정 챗봘에 접근 가능한 사용자 목록"""
+        """특정 챗봇에 접근 가능한 사용자 목록"""
         pass
 
     @abstractmethod
@@ -157,7 +157,7 @@ class MockPermissionRepository(PermissionRepository):
 
     def check_access(self, knox_id: str, chatbot_id: str) -> bool:
         """
-        특정 챗봘 접근 권한 확인
+        특정 챗봇 접근 권한 확인
         - 권한이 없으면 기본적으로 허용 (True)
         - 명시적으로 차단된 경우만 차단 (can_access=False)
         """
