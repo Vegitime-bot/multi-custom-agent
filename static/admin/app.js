@@ -224,6 +224,13 @@ async function loadHierarchy() {
         const response = await fetch('/main/api/chatbots');
         const bots = await response.json();
         
+        // API 응답 체크
+        if (!Array.isArray(bots)) {
+            console.error('API 응답이 배열이 아님:', bots);
+            container.innerHTML = '<p class="text-center py-10 text-error">챗봇 데이터 로드 실패 (형식 오류)</p>';
+            return;
+        }
+        
         // Build 3-tier hierarchy tree
         const roots = bots.filter(b => !b.parent_id || b.level === 0);
         
