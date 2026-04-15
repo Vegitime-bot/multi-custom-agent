@@ -71,7 +71,12 @@ async function loadChatbots() {
         const response = await fetch('/main/api/chatbots');
         if (!response.ok) throw new Error('Failed to load');
         
-        chatbots = await response.json();
+        const data = await response.json();
+        if (!Array.isArray(data)) {
+            console.error('API 응답이 배열이 아님:', data);
+            throw new Error('잘못된 데이터 형식');
+        }
+        chatbots = data;
         renderChatbots();
         populateParentSelect();
         loadStoreStats();
