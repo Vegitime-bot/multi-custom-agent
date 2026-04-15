@@ -570,7 +570,7 @@ async function loadDBPermissions() {
     `;
     
     try {
-        const response = await fetch('/api/db-permissions/admin/stats');
+        const response = await fetch('/main/main/api/db-permissions/admin/stats');
         if (!response.ok) throw new Error('DB 권한 API 응답 오류');
         
         const stats = await response.json();
@@ -636,7 +636,7 @@ function renderDBUsersList(userStats) {
 
 async function viewUserDBPermissions(knoxId) {
     try {
-        const response = await fetch(`/api/db-permissions/users/${knoxId}`);
+        const response = await fetch(`/main/main/api/db-permissions/users/${knoxId}`);
         if (!response.ok) throw new Error('DB 권한 조회 실패');
         
         const data = await response.json();
@@ -696,7 +696,7 @@ async function viewUserDBPermissions(knoxId) {
 
 async function updateUserDBPermission(knoxId, dbId, canAccess) {
     try {
-        const response = await fetch(`/api/db-permissions/${knoxId}/${dbId}`, {
+        const response = await fetch(`/main/api/db-permissions/${knoxId}/${dbId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ can_access: canAccess })
@@ -716,7 +716,7 @@ async function deleteUserDBPermission(knoxId, dbId) {
     if (!confirm(`정말로 ${dbId}에 대한 DB 권한을 삭제하시겠습니까?`)) return;
     
     try {
-        const response = await fetch(`/api/db-permissions/${knoxId}/${dbId}`, {
+        const response = await fetch(`/main/api/db-permissions/${knoxId}/${dbId}`, {
             method: 'DELETE'
         });
         

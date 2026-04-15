@@ -63,6 +63,13 @@ async def get_current_user_info(request: Request) -> dict:
     
     # SSO
     sso_data = request.session.get('sso')
+    
+    # 디버그 로그
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[DEBUG] SSO Session Data: {sso_data}")
+    logger.info(f"[DEBUG] Session keys: {list(request.session.keys())}")
+    
     if not sso_data:
         raise HTTPException(status_code=401, detail="인증이 필요합니다")
     
@@ -70,8 +77,19 @@ async def get_current_user_info(request: Request) -> dict:
     name = "Unknown"
     
     if isinstance(sso_data, dict):
-        knox_id = sso_data.get('knox_id') or sso_data.get('email') or sso_data.get('sub')
+        # 가능한 모든 필드에서 knox_id 추출 시도
+        possible_keys = ['knox_id', 'email', 'sub', 'preferred_username', 'username', 'user_id', 'id']
+        for key in possible_keys:
+            if sso_data.get(key):
+                knox_id = sso_data.get(key)
+                logger.info(f"[DEBUG] Found ID from key '{key}': {knox_id}")
+                break
+        
         name = sso_data.get('name') or sso_data.get('display_name') or sso_data.get('preferred_username') or knox_id
+    
+    logger.info(f"[DEBUG] Extracted knox_id: {knox_id}")
+    logger.info(f"[DEBUG] ADMIN_USER_IDS: {settings.ADMIN_USER_IDS}")
+    logger.info(f"[DEBUG] Is admin: {knox_id in settings.ADMIN_USER_IDS}")
     
     if not knox_id:
         raise HTTPException(status_code=401, detail="사용자 정보를 확인할 수 없습니다")

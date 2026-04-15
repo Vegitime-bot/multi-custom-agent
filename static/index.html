@@ -92,14 +92,14 @@
 
     .typing-indicator { color: #999; font-style: italic; }
 
-    /* 토글 스위치 스타일 */
+    /* 토글 스위치 스타일 - 개선된 버전 */
     .toggle-switch {
       position: relative;
       display: inline-flex;
       align-items: center;
       cursor: pointer;
       user-select: none;
-      gap: 10px;
+      gap: 12px;
     }
     .toggle-switch input {
       opacity: 0;
@@ -108,36 +108,47 @@
     }
     .toggle-slider {
       position: relative;
-      width: 52px;
-      height: 28px;
-      background: #ccc;
-      border-radius: 28px;
+      width: 60px;
+      height: 32px;
+      background: #888;
+      border-radius: 32px;
       transition: 0.3s;
       flex-shrink: 0;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
     }
     .toggle-slider:before {
-      content: "";
+      content: "OFF";
       position: absolute;
-      width: 22px;
-      height: 22px;
-      left: 3px;
-      bottom: 3px;
+      width: 28px;
+      height: 28px;
+      left: 2px;
+      top: 2px;
       background: white;
       border-radius: 50%;
       transition: 0.3s;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: bold;
+      color: #666;
     }
     .toggle-switch input:checked + .toggle-slider {
       background: #1a73e8;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
     }
     .toggle-switch input:checked + .toggle-slider:before {
-      transform: translateX(24px);
+      transform: translateX(28px);
+      content: "ON";
+      color: #1a73e8;
     }
     .toggle-label {
       font-size: 0.9rem;
-      font-weight: 500;
+      font-weight: 600;
       color: #fff;
       white-space: nowrap;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
     }
   </style>
 </head>
