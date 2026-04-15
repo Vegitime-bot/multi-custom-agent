@@ -156,9 +156,14 @@ class MockPermissionRepository(PermissionRepository):
         ]
 
     def check_access(self, knox_id: str, chatbot_id: str) -> bool:
+        """
+        특정 챗봘 접근 권한 확인
+        - 권한이 없으면 기본적으로 허용 (True)
+        - 명시적으로 차단된 경우만 차단 (can_access=False)
+        """
         key = (knox_id, chatbot_id)
         if key not in self._permissions:
-            return False
+            return True  # 기본값: 허용
         return self._permissions[key]["can_access"]
 
     def grant_access(self, knox_id: str, chatbot_id: str, can_access: bool = True) -> bool:
@@ -207,12 +212,18 @@ class PGPermissionRepository(PermissionRepository):
         return [r.to_dict() for r in rows]
 
     def check_access(self, knox_id: str, chatbot_id: str) -> bool:
+        """
+        특정 챗봇 접근 권한 확인 (PostgreSQL)
+        - 권한이 없으면 기본적으로 허용 (True)
+        - 명시적으로 차단된 경우만 차단 (can_access=False)
+        """
         row = self.session.query(UserChatbotAccess).filter_by(
             knox_id=knox_id,
             chatbot_id=chatbot_id,
-            can_access=True
         ).first()
-        return row is not None
+        if not row:
+            return True  # 기본값: 허용
+        return row.can_access
 
     def grant_access(self, knox_id: str, chatbot_id: str, can_access: bool = True) -> bool:
         existing = self.session.query(UserChatbotAccess).filter_by(

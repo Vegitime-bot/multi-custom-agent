@@ -48,6 +48,7 @@ class ChatRequest(BaseModel):
     mode: str | None = None  # "tool" | "agent" | None (None이면 default_mode 사용)
     role_override: dict[str, str] | None = None  # 하위호환
     active_level: int = 1
+    multi_sub_execution: bool | None = None  # 사용자 선택값 (None이면 챗봇 기본값 사용)
 
 
 class SessionCreateRequest(BaseModel):
@@ -385,6 +386,11 @@ async def chat(
     logger.info(f"[Chat {request_id}] 권한 확인 완료")
 
     # 6. Executor 생성 (상위 챗봇 체크)
+    # 사용자 선택값이 있으면 policy에 반영
+    if body.multi_sub_execution is not None:
+        chatbot_def.policy['multi_sub_execution'] = body.multi_sub_execution
+        logger.info(f"[Chat {request_id}] multi_sub_execution: {body.multi_sub_execution} (사용자 선택)")
+    
     executor = create_executor(
         mode, chatbot_def, ingestion_client, memory_mgr, chatbot_mgr
     )
