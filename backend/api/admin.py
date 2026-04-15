@@ -347,3 +347,21 @@ async def get_stats(
         "parents": parents,
         "active": sum(1 for c in all_defs if c.active),
     }
+
+
+# ── DB 목록 ─────────────────────────────────────────────────────────
+@router.get("/main/api/databases")
+async def list_databases(
+    chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
+) -> List[str]:
+    """
+    모든 챗봇에서 사용 중인 DB ID 목록 반환
+    """
+    all_defs = chatbot_mgr.list_all()
+    db_ids = set()
+    
+    for chatbot in all_defs:
+        if chatbot.retrieval and chatbot.retrieval.db_ids:
+            db_ids.update(chatbot.retrieval.db_ids)
+    
+    return sorted(list(db_ids))

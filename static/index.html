@@ -129,26 +129,40 @@
   const multiSubToggle = document.getElementById('multi-sub-toggle');
   const multiSubCheckbox = document.getElementById('multi-sub-checkbox');
 
-  // ── 챗봇 목록 로드 ──────────────────────────────────────────────
+  // ── URL 파라미터에서 챗봘 ID 가져오기 ───────────────────────────
+  function getUrlParam(name) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(name);
+  }
+
+  function updateUrlParam(name, value) {
+    const url = new URL(window.location);
+    if (value) {
+      url.searchParams.set(name, value);
+    } else {
+      url.searchParams.delete(name);
+    }
+    window.history.replaceState({}, '', url);
+  }
+
+  // ── 챗봘 목록 로드 ──────────────────────────────────────────────
   async function loadChatbots() {
     try {
       const res = await fetch(`${BASE}/api/chatbots`);
       chatbots = await res.json();  // 전역 변수에 저장
       selector.innerHTML = '<option value="">챗봇 선택...</option>';
-      let firstParent = null;
       chatbots.forEach(b => {
         const opt = document.createElement('option');
         opt.value = b.id;
-        const isParent = b.sub_chatbots?.length > 0;
-        const typeLabel = isParent ? 'Parent' : (b.parent_id ? 'Child' : 'Standalone');
+        const typeLabel = b.sub_chatbots?.length > 0 ? 'Parent' : (b.parent_id ? 'Child' : 'Standalone');
         opt.textContent = `${b.name} (${typeLabel})`;
         selector.appendChild(opt);
-        if (isParent && !firstParent) firstParent = b;
       });
       
-      // 자동으로 첫 Parent 챗봘 선택 (토글 표시용)
-      if (firstParent) {
-        selector.value = firstParent.id;
+      // URL 파라미터에서 챗봘 ID 확인하고 자동 선택
+      const urlChatbotId = getUrlParam('chatbot');
+      if (urlChatbotId && chatbots.find(b => b.id === urlChatbotId)) {
+        selector.value = urlChatbotId;
         selector.dispatchEvent(new Event('change'));
       }
     } catch(e) {
@@ -161,6 +175,9 @@
     sessionId = null;
     chatContainer.innerHTML = '';
     updateSessionInfo();
+    
+    // URL 파라미터 업데이트
+    updateUrlParam('chatbot', selectedChatbotId);
     
     // 챗봇에 sub_chatbots가 있으면 multi_sub_execution 토글 표시
     if (selectedChatbotId) {

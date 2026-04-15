@@ -885,9 +885,26 @@ function openDetailModal(chatbotId) {
                 <label class="w-28 text-sm font-medium text-on-surface-variant">하위 Agent</label>
                 <span class="flex-1 text-sm text-on-surface">${chatbot.sub_chatbots.join(', ')}</span>
             </div>` : ''}
-            <div class="flex py-4">
-                <label class="w-28 text-sm font-medium text-on-surface-variant">연결된 DB</label>
-                <div class="flex-1 flex flex-wrap gap-2">${chatbot.db_ids?.map(db => `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/5 text-primary">${db}</span>`).join(' ') || '없음'}</div>
+            <div class="flex py-4 items-start">
+                <label class="w-28 text-sm font-medium text-on-surface-variant pt-1">연결된 DB</label>
+                <div class="flex-1">
+                    <div class="flex flex-wrap gap-2 mb-3" id="detailDbList">${chatbot.db_ids?.map(db => `<span class="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/5 text-primary">${db}</span>`).join(' ') || '<span class="text-sm text-slate-400">없음</span>'}</div>
+                    <button onclick="loadDBSelector('${chatbot.id}')" class="px-4 py-2 rounded-xl text-sm font-medium bg-surface-container-low hover:bg-surface-container text-primary transition-colors flex items-center gap-2">
+                        <span class="material-symbols-outlined text-sm">edit</span> DB 관리
+                    </button>
+                    <div id="dbSelectorContainer" class="mt-4 hidden">
+                        <div class="bg-surface-container-low rounded-xl p-4">
+                            <p class="text-sm font-medium text-on-surface mb-3">연결할 DB 선택</p>
+                            <div id="dbCheckboxList" class="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                                <!-- DB 체크박스 목록 -->
+                            </div>
+                            <div class="flex gap-2 mt-4">
+                                <button onclick="saveChatbotDBs('${chatbot.id}')" class="flex-1 py-2 rounded-lg text-sm font-medium bg-primary text-white hover:opacity-90 transition-opacity">저장</button>
+                                <button onclick="closeDBSelector()" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">취소</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -902,6 +919,85 @@ function closeDetailModal() {
     document.getElementById('detailModal').classList.add('hidden');
     document.getElementById('detailModal').classList.remove('flex');
     detailChatbotId = null;
+}
+
+// DB 관리 함수들
+async function loadDBSelector(chatbotId) {
+    try {
+        const chatbot = chatbots.find(c => c.id === chatbotId);
+        const currentDBs = new Set(chatbot?.db_ids || []);
+        
+        // DB 목록 가져오기
+        const response = await fetch('/main/api/databases');
+        const dbList = await response.json();
+        
+        const container = document.getElementById('dbCheckboxList');
+        const selectorContainer = document.getElementById('dbSelectorContainer');
+        
+        if (dbList.length === 0) {
+            container.innerHTML = '<p class="text-sm text-slate-400">사용 가능한 DB가 없습니다</p>';
+        } else {
+            container.innerHTML = dbList.map(db => `
+                <label class="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-white/50 transition-colors">
+                    <input type="checkbox" value="${db}" ${currentDBs.has(db) ? 'checked' : ''} 
+                           class="w-4 h-4 text-primary rounded border-slate-300 focus:ring-primary">
+                    <span class="text-sm font-medium text-on-surface">${db}</span>
+                </label>
+            `).join('');
+        }
+        
+        selectorContainer.classList.remove('hidden');
+    } catch (error) {
+        console.error('DB 목록 로드 실패:', error);
+        showToast('DB 목록을 불러오지 못했습니다', 'error');
+    }
+}
+
+function closeDBSelector() {
+    document.getElementById('dbSelectorContainer').classList.add('hidden');
+}
+
+async function saveChatbotDBs(chatbotId) {
+    const checkboxes = document.querySelectorAll('#dbCheckboxList input[type="checkbox"]:checked');
+    const selectedDBs = Array.from(checkboxes).map(cb => cb.value);
+    
+    try {
+        // 챗봘 정보 가져오기
+        const chatbot = chatbots.find(c => c.id === chatbotId);
+        if (!chatbot) throw new Error('챗봇을 찾을 수 없습니다');
+        
+        // 수정된 챗봘 데이터 준비
+        const updateData = {
+            id: chatbotId,
+            name: chatbot.name,
+            description: chatbot.description,
+            active: chatbot.active,
+            db_ids: selectedDBs,
+            system_prompt: chatbot.system_prompt,
+            parent_id: chatbot.parent_id,
+            policy: chatbot.policy
+        };
+        
+        const response = await fetch(`/main/api/chatbots/${chatbotId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData)
+        });
+        
+        if (!response.ok) throw new Error('DB 연결 저장 실패');
+        
+        showToast('DB 연결이 저장되었습니다', 'success');
+        closeDBSelector();
+        
+        // 상세 모달 새로고침
+        openDetailModal(chatbotId);
+        
+        // 챗봘 목록 새로고침
+        await loadChatbots();
+    } catch (error) {
+        console.error('DB 저장 실패:', error);
+        showToast('DB 저장 실패: ' + error.message, 'error');
+    }
 }
 
 function startChatFromDetail() {
