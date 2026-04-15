@@ -20,32 +20,49 @@ class BaseExecutor(ABC):
 
     def _calculate_confidence(self, context: str, message: str) -> int:
         """
-        검색 결과 기반 Confidence 계산
+        검색 결과 기반 Confidence 계산 (개선된 버전)
         
         기준:
-        - 검색 결과 없음: 0-20%
+        - 검색 결과 없음: 10-20%
         - 검색 결과 있지만 관련도 낮음: 30-50%
-        - 검색 결과 충분: 60-100%
+        - 검색 결과 충분: 60-95%
         """
         if not context or not context.strip():
-            return 15  # 검색 결과 없음
+            return 10  # 검색 결과 없음
         
-        # 검색 결과 분석
-        result_count = context.count('---') + context.count('**') // 2
         content_length = len(context)
+        message_words = [kw.lower() for kw in message.split() if len(kw) > 1]
+        context_lower = context.lower()
         
-        # 메시지 키워드 매칭
-        keywords_found = sum(1 for kw in message.split() if len(kw) > 1 and kw.lower() in context.lower())
+        # 키워드 매칭 (중복 제거)
+        keywords_found = sum(1 for kw in set(message_words) if kw in context_lower)
+        keyword_match_ratio = keywords_found / len(message_words) if message_words else 0
         
-        # Confidence 계산
-        if result_count == 0 and content_length < 100:
-            return 20  # 거의 관련 없음
-        elif result_count <= 2 and keywords_found < 2:
-            return 40  # 관련도 낮음
-        elif result_count <= 3 and keywords_found < 3:
-            return 60  # 보통
-        else:
-            return 85  # 충분한 정보
+        # 컨텍스트 정보 밀도 (문서당 평균 길이 추정)
+        # 일반적으로 검색 결과는 ### 구분자로 문서가 구분됨
+        doc_count = context.count('###') + context.count('---') + 1
+        avg_doc_length = content_length / doc_count if doc_count > 0 else content_length
+        
+        # 점수 계산 (가중치 조합)
+        # content_length: 0~40점 (0자~5000자 기준)
+        length_score = min(40, content_length / 125)
+        
+        # keyword_match_ratio: 0~30점
+        keyword_score = keyword_match_ratio * 30
+        
+        # avg_doc_length: 0~25점 (짧은 문서는 정보 밀도 낮음으로 간주)
+        density_score = min(25, avg_doc_length / 40)
+        
+        total_score = int(length_score + keyword_score + density_score)
+        
+        # 보넘스/페널티
+        if keyword_match_ratio >= 0.7:
+            total_score += 10  # 높은 키워드 매칭 보너스
+        elif keyword_match_ratio < 0.2:
+            total_score -= 10  # 낮은 키워드 매칭 페널티
+        
+        # 범위 클리핑
+        return max(15, min(95, total_score))
 
     def _retrieve(self, query: str, db_ids: list[str]) -> str:
         """RAG 검색 - 공통 기능"""
