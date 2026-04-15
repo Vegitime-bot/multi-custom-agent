@@ -135,13 +135,22 @@
       const res = await fetch(`${BASE}/api/chatbots`);
       chatbots = await res.json();  // 전역 변수에 저장
       selector.innerHTML = '<option value="">챗봇 선택...</option>';
+      let firstParent = null;
       chatbots.forEach(b => {
         const opt = document.createElement('option');
         opt.value = b.id;
-        const typeLabel = b.sub_chatbots?.length > 0 ? 'Parent' : (b.parent_id ? 'Child' : 'Standalone');
+        const isParent = b.sub_chatbots?.length > 0;
+        const typeLabel = isParent ? 'Parent' : (b.parent_id ? 'Child' : 'Standalone');
         opt.textContent = `${b.name} (${typeLabel})`;
         selector.appendChild(opt);
+        if (isParent && !firstParent) firstParent = b;
       });
+      
+      // 자동으로 첫 Parent 챗봘 선택 (토글 표시용)
+      if (firstParent) {
+        selector.value = firstParent.id;
+        selector.dispatchEvent(new Event('change'));
+      }
     } catch(e) {
       addSystemMsg('챗봇 목록을 불러오지 못했습니다.');
     }
