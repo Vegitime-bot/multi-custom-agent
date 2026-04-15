@@ -7,9 +7,10 @@ from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Depends, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from backend.managers.chatbot_manager import ChatbotManager
+from backend.config import settings
 
 router = APIRouter(tags=["admin"])
 
@@ -18,6 +19,70 @@ STATIC_DIR = Path(__file__).parent.parent.parent / "static" / "admin"
 
 def get_chatbot_manager(request: Request) -> ChatbotManager:
     return request.app.state.chatbot_manager
+
+
+# ── 관리자 권한 체크 ────────────────────────────────────────────
+def require_admin(request: Request):
+    """관리자 권한 체크 의존성"""
+    # Mock Auth 모드에서는 항상 허용
+    if settings.USE_MOCK_AUTH:
+        return True
+    
+    # SSO 세션에서 사용자 ID 확인
+    sso_data = request.session.get('sso')
+    if not sso_data:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    # SSO 데이터에서 knox_id 추출
+    knox_id = None
+    if isinstance(sso_data, dict):
+        knox_id = sso_data.get('knox_id') or sso_data.get('email') or sso_data.get('sub')
+    
+    if not knox_id:
+        raise HTTPException(status_code=401, detail="사용자 정보를 확인할 수 없습니다")
+    
+    # 관리자 ID 목록에 있는지 확인
+    if knox_id not in settings.ADMIN_USER_IDS:
+        raise HTTPException(status_code=403, detail="관리자 권한이 필요합니다")
+    
+    return True
+
+
+# ── 현재 사용자 정보 조회 ───────────────────────────────────────
+@router.get("/main/api/me")
+async def get_current_user_info(request: Request) -> dict:
+    """현재 로그인한 사용자 정보 반환"""
+    # Mock Auth
+    if settings.USE_MOCK_AUTH:
+        return {
+            "knox_id": "user-001",
+            "name": "Admin User",
+            "role": "system_admin",
+            "is_admin": True
+        }
+    
+    # SSO
+    sso_data = request.session.get('sso')
+    if not sso_data:
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    
+    knox_id = None
+    name = "Unknown"
+    
+    if isinstance(sso_data, dict):
+        knox_id = sso_data.get('knox_id') or sso_data.get('email') or sso_data.get('sub')
+        name = sso_data.get('name') or sso_data.get('display_name') or sso_data.get('preferred_username') or knox_id
+    
+    if not knox_id:
+        raise HTTPException(status_code=401, detail="사용자 정보를 확인할 수 없습니다")
+    
+    is_admin = knox_id in settings.ADMIN_USER_IDS
+    
+    return {
+        "knox_id": knox_id,
+        "name": name,
+        "is_admin": is_admin
+    }
 
 
 # ── 관리자 페이지 HTML ────────────────────────────────────────────
@@ -85,7 +150,9 @@ def _find_parent(chatbot_id: str, all_defs) -> Optional[str]:
 @router.post("/main/api/chatbots")
 async def create_chatbot(
     request: dict,
+    req: Request,
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
+    _: bool = Depends(require_admin),
 ) -> dict:
     chatbots_dir = chatbot_mgr._dir
     file_path = chatbots_dir / f"{request['id']}.json"
@@ -167,7 +234,9 @@ async def create_chatbot(
 async def update_chatbot(
     chatbot_id: str,
     request: dict,
+    req: Request,
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
+    _: bool = Depends(require_admin),
 ) -> dict:
     """챗봇 정의를 수정한다."""
     chatbots_dir = chatbot_mgr._dir
