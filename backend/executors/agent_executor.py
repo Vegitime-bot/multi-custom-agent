@@ -43,8 +43,12 @@ class AgentExecutor(BaseExecutor):
         Yields:
             LLM 응답 청크
         """
-        print(f"[DEBUG AgentExecutor] execute called: chatbot={self.chatbot_def.id}, session={session_id}")
-        print(f"[DEBUG AgentExecutor] retrieval.db_ids: {self.chatbot_def.retrieval.db_ids}")
+        # DEBUG: 실행 정보 로깅
+        print(f"[DEBUG AgentExecutor] ========== START ==========")
+        print(f"[DEBUG AgentExecutor] chatbot_id: {self.chatbot_def.id}")
+        print(f"[DEBUG AgentExecutor] session_id: {session_id}")
+        print(f"[DEBUG AgentExecutor] db_ids: {self.chatbot_def.retrieval.db_ids}")
+        print(f"[DEBUG AgentExecutor] query: {message[:100]}...")
         
         # 1. 메모리에서 히스토리 복원
         history = self.memory.get_history(self.chatbot_def.id, session_id)
