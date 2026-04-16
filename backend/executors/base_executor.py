@@ -66,7 +66,11 @@ class BaseExecutor(ABC):
 
     def _retrieve(self, query: str, db_ids: list[str]) -> str:
         """RAG 검색 - 공통 기능"""
+        import json
+        print(f"[DEBUG] _retrieve called - query: {query[:50]}..., db_ids: {db_ids}")
+        print(f"[DEBUG] chatbot: {self.chatbot_def.id}, retrieval.k: {self.chatbot_def.retrieval.k}")
         if not db_ids:
+            print(f"[DEBUG] db_ids is empty, returning empty context")
             return ""
         results = self.ingestion.search(
             db_ids=db_ids,
@@ -74,7 +78,14 @@ class BaseExecutor(ABC):
             k=self.chatbot_def.retrieval.k,
             filter_metadata=self.chatbot_def.retrieval.filter_metadata,
         )
-        return format_context(results)
+        print(f"[DEBUG] ingestion.search returned {len(results)} results")
+        if results:
+            print(f"[DEBUG] first result: {json.dumps(results[0], ensure_ascii=False, default=str)[:200]}...")
+        else:
+            print(f"[DEBUG] no results found for db_ids: {db_ids}")
+        context = format_context(results)
+        print(f"[DEBUG] formatted context length: {len(context)}")
+        return context
 
     def _build_messages(
         self,
