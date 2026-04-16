@@ -146,6 +146,7 @@ async def list_chatbots(
             "sub_chatbots": [{"id": s.id, "level": s.level, "default_role": s.default_role.value} for s in cb.sub_chatbots] if cb.sub_chatbots else [],
             "parent_id": cb.parent_id,
             "level": cb.level,
+            "keywords": cb.keywords,
         }
 
         # 타입 결정
@@ -211,6 +212,7 @@ async def create_chatbot(
             "max_messages": 20,
         }),
         "sub_chatbots": [],
+        "keywords": request.get("keywords", []),
     }
 
     # 3-tier hierarchy support: parent_id and level

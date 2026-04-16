@@ -134,6 +134,13 @@ async function saveNewChatbot(event) {
     const type = document.querySelector('input[name="newChatbotType"]:checked').value;
     const parentId = document.getElementById('newChatbotParent').value;
     const systemPrompt = document.getElementById('newChatbotPrompt').value.trim();
+    const keywordsInput = document.getElementById('newChatbotKeywords')?.value.trim() || '';
+    
+    // 키워드 파싱 (쉼표로 구분, 공백 제거)
+    const keywords = keywordsInput
+        .split(',')
+        .map(k => k.trim())
+        .filter(k => k.length > 0);
     
     // 선택된 DB 수집
     const selectedDBs = [];
@@ -151,6 +158,7 @@ async function saveNewChatbot(event) {
         description: description,
         active: true,
         db_ids: selectedDBs,
+        keywords: keywords,
         sub_chatbots: [],
         type: type,
         system_prompt: systemPrompt,
@@ -1054,6 +1062,12 @@ function openDetailModal(chatbotId) {
                 <label class="w-28 text-sm font-medium text-on-surface-variant">하위 Agent</label>
                 <span class="flex-1 text-sm text-on-surface">${chatbot.sub_chatbots.map(sub => typeof sub === 'object' ? sub.id : sub).join(', ')}</span>
             </div>` : ''}
+            <div class="flex py-4 border-b border-outline-variant items-start">
+                <label class="w-28 text-sm font-medium text-on-surface-variant pt-1">검색 키워드</label>
+                <div class="flex-1">
+                    ${chatbot.keywords?.length ? chatbot.keywords.map(kw => `<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-tertiary-container/10 text-tertiary-container mr-1 mb-1">${kw}</span>`).join('') : '<span class="text-sm text-slate-400">없음</span>'}
+                </div>
+            </div>
             <div class="flex py-4 items-start">
                 <label class="w-28 text-sm font-medium text-on-surface-variant pt-1">연결된 DB</label>
                 <div class="flex-1">

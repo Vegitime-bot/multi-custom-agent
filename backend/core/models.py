@@ -83,6 +83,9 @@ class ChatbotDef:
     # 3-tier hierarchy support (v2)
     parent_id: Optional[str] = None  # 부모 챗봇 ID (None이면 Root)
     level: int = 0  # 계층 레벨 (0=Root, 1=Parent, 2=Child, ...)
+    
+    # 검색용 키워드 (위임/검색 최적화용)
+    keywords: list[str] = field(default_factory=list)
 
     @property
     def is_leaf(self) -> bool:
@@ -136,6 +139,7 @@ class ChatbotDef:
                 # 3-tier hierarchy support
                 parent_id=data.get("parent_id"),
                 level=data.get("level", 0),
+                keywords=data.get("keywords", []),
             )
         else:
             # 기존 구조: role/retrieval/llm/memory 방식 (하위호환)
@@ -167,6 +171,7 @@ class ChatbotDef:
                 # 3-tier hierarchy support (기존 데이터에서도 읽기)
                 parent_id=data.get("parent_id"),
                 level=data.get("level", 0),
+                keywords=data.get("keywords", []),
             )
 
     def to_dict(self) -> dict:
@@ -199,6 +204,7 @@ class ChatbotDef:
             # 3-tier hierarchy support
             "parent_id": self.parent_id,
             "level": self.level,
+            "keywords": self.keywords,
         }
         
         # Optional fields only include if set
