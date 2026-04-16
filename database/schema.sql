@@ -99,6 +99,30 @@ INSERT INTO test.user_chatbot_access (knox_id, chatbot_id, can_access, created_a
 ('guest', 'chatbot-tech', TRUE, CURRENT_TIMESTAMP);
 
 -- ============================================
+-- DB 권한 관리 테이블
+-- ============================================
+
+DROP TABLE IF EXISTS test.user_db_access;
+
+CREATE TABLE test.user_db_access (
+    id SERIAL NOT NULL,
+    knox_id VARCHAR(50) NULL,
+    db_id VARCHAR(50) NULL,
+    can_access BOOLEAN DEFAULT TRUE NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NULL,
+    CONSTRAINT user_db_access_pkey PRIMARY KEY (id),
+    CONSTRAINT unique_user_db UNIQUE (knox_id, db_id)
+);
+
+CREATE INDEX idx_user_db_knox_id ON test.user_db_access(knox_id);
+CREATE INDEX idx_user_db_db_id ON test.user_db_access(db_id);
+
+COMMENT ON TABLE test.user_db_access IS '사용자-DB 접근 권한 관리 테이블';
+COMMENT ON COLUMN test.user_db_access.knox_id IS '사용자 Knox ID';
+COMMENT ON COLUMN test.user_db_access.db_id IS 'DB ID';
+COMMENT ON COLUMN test.user_db_access.can_access IS '접근 권한 여부';
+
+-- ============================================
 -- Verification Queries
 -- ============================================
 

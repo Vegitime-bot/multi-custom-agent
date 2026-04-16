@@ -43,6 +43,18 @@ async function loadCurrentUser() {
             currentUser = await response.json();
             isAdmin = currentUser.is_admin || false;
             console.log('Current user:', currentUser, 'Is admin:', isAdmin);
+            
+            // 사용자 정보 UI 업데이트
+            const userNameEl = document.getElementById('userName');
+            const userRoleEl = document.getElementById('userRole');
+            const userAvatarEl = document.getElementById('userAvatar');
+            
+            if (userNameEl) userNameEl.textContent = currentUser.knox_id || 'Unknown';
+            if (userRoleEl) userRoleEl.textContent = currentUser.is_admin ? 'System Admin' : 'User';
+            if (userAvatarEl) {
+                const initial = (currentUser.knox_id || 'U').charAt(0).toUpperCase();
+                userAvatarEl.textContent = initial;
+            }
             // 관리자면 챗봇 추가 버튼 표시
             const addBtn = document.getElementById('addChatbotBtn');
             if (addBtn && isAdmin) {

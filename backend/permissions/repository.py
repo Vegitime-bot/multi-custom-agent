@@ -39,6 +39,30 @@ class UserChatbotAccess(Base):
         }
 
 
+class UserDbAccess(Base):
+    """사용자-DB 접근 권한 테이블"""
+    __tablename__ = 'user_db_access'
+    __table_args__ = (
+        UniqueConstraint('knox_id', 'db_id', name='unique_user_db'),
+        {'schema': 'test'}
+    )
+
+    id = Column(Integer, primary_key=True)
+    knox_id = Column(String(50), nullable=True)
+    db_id = Column(String(50), nullable=True)
+    can_access = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "knox_id": self.knox_id,
+            "db_id": self.db_id,
+            "can_access": self.can_access,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 # ── 인터페이스 ─────────────────────────────────────────────────────
 class PermissionRepository(ABC):
     @abstractmethod
@@ -69,6 +93,27 @@ class PermissionRepository(ABC):
     @abstractmethod
     def get_all_permissions(self, skip: int = 0, limit: int = 100) -> List[dict]:
         """전체 권한 목록 (페이징)"""
+        pass
+
+    # DB 권한 메서드
+    @abstractmethod
+    def get_user_db_permissions(self, knox_id: str) -> List[dict]:
+        """사용자의 DB 권한 목록 조회"""
+        pass
+
+    @abstractmethod
+    def grant_db_access(self, knox_id: str, db_id: str, can_access: bool = True) -> bool:
+        """DB 권한 부여/수정"""
+        pass
+
+    @abstractmethod
+    def revoke_db_access(self, knox_id: str, db_id: str) -> bool:
+        """DB 권한 철회"""
+        pass
+
+    @abstractmethod
+    def get_all_db_permissions(self, skip: int = 0, limit: int = 100) -> List[dict]:
+        """전체 DB 권한 목록"""
         pass
 
 
@@ -199,6 +244,23 @@ class MockPermissionRepository(PermissionRepository):
     def get_all_permissions(self, skip: int = 0, limit: int = 100) -> List[dict]:
         return list(self._permissions.values())[skip:skip+limit]
 
+    # DB 권한 메서드 (Mock)
+    def get_user_db_permissions(self, knox_id: str) -> List[dict]:
+        """Mock: 모든 DB에 접근 가능으로 반환"""
+        return []
+
+    def grant_db_access(self, knox_id: str, db_id: str, can_access: bool = True) -> bool:
+        """Mock: 항상 성공"""
+        return True
+
+    def revoke_db_access(self, knox_id: str, db_id: str) -> bool:
+        """Mock: 항상 성공"""
+        return True
+
+    def get_all_db_permissions(self, skip: int = 0, limit: int = 100) -> List[dict]:
+        """Mock: 빈 목록 반환"""
+        return []
+
 
 # ── PostgreSQL 구현체 ─────────────────────────────────────────────
 class PGPermissionRepository(PermissionRepository):
@@ -261,6 +323,42 @@ class PGPermissionRepository(PermissionRepository):
 
     def get_all_permissions(self, skip: int = 0, limit: int = 100) -> List[dict]:
         rows = self.session.query(UserChatbotAccess).offset(skip).limit(limit).all()
+        return [r.to_dict() for r in rows]
+
+    # DB 권한 메서드 (PostgreSQL)
+    def get_user_db_permissions(self, knox_id: str) -> List[dict]:
+        rows = self.session.query(UserDbAccess).filter_by(knox_id=knox_id).all()
+        return [r.to_dict() for r in rows]
+
+    def grant_db_access(self, knox_id: str, db_id: str, can_access: bool = True) -> bool:
+        existing = self.session.query(UserDbAccess).filter_by(
+            knox_id=knox_id,
+            db_id=db_id
+        ).first()
+
+        if existing:
+            existing.can_access = can_access
+        else:
+            new_perm = UserDbAccess(
+                knox_id=knox_id,
+                db_id=db_id,
+                can_access=can_access
+            )
+            self.session.add(new_perm)
+
+        self.session.commit()
+        return True
+
+    def revoke_db_access(self, knox_id: str, db_id: str) -> bool:
+        result = self.session.query(UserDbAccess).filter_by(
+            knox_id=knox_id,
+            db_id=db_id
+        ).delete()
+        self.session.commit()
+        return result > 0
+
+    def get_all_db_permissions(self, skip: int = 0, limit: int = 100) -> List[dict]:
+        rows = self.session.query(UserDbAccess).offset(skip).limit(limit).all()
         return [r.to_dict() for r in rows]
 
 

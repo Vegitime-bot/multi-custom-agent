@@ -401,28 +401,33 @@ async def list_databases(
     return sorted(list(db_ids))
 
 
-# ── DB 권한 관리 (Mock) ───────────────────────────────────────────
-# TODO: 실제 DB 권한 테이블 구현 필요 (현재는 Mock 데이터)
-MOCK_DB_PERMISSIONS: dict[str, list[str]] = {}  # knox_id -> [db_id, db_id, ...]
+# ── DB 권한 관리 (PostgreSQL) ───────────────────────────────────
+from backend.permissions.repository import get_permission_repository
 
 
 @router.get("/main/api/db-permissions/admin/stats")
 async def get_db_permission_stats(
     _: bool = Depends(require_admin),
+    db: Session = Depends(get_db_session),
 ) -> dict:
     """
     DB 권한 통계 조회 (관리자용)
     """
+    repo = get_permission_repository(use_mock=False, session=db)
+    all_perms = repo.get_all_db_permissions(limit=10000)
+    
     user_stats = {}
-    for knox_id, db_list in MOCK_DB_PERMISSIONS.items():
-        user_stats[knox_id] = {
-            "accessible": len(db_list),
-            "total": len(db_list),  # 전체 DB 수 필요 시 계산
-        }
+    for p in all_perms:
+        knox_id = p.get("knox_id", "unknown")
+        if knox_id not in user_stats:
+            user_stats[knox_id] = {"accessible": 0, "total": 0}
+        user_stats[knox_id]["total"] += 1
+        if p.get("can_access"):
+            user_stats[knox_id]["accessible"] += 1
     
     return {
         "user_stats": user_stats,
-        "total_users": len(MOCK_DB_PERMISSIONS),
+        "total_users": len(user_stats),
     }
 
 
@@ -430,9 +435,11 @@ async def get_db_permission_stats(
 async def get_user_db_permissions(
     knox_id: str,
     _: bool = Depends(require_admin),
-) -> list[str]:
+    db: Session = Depends(get_db_session),
+) -> list[dict]:
     """특정 사용자의 DB 권한 목록 조회"""
-    return MOCK_DB_PERMISSIONS.get(knox_id, [])
+    repo = get_permission_repository(use_mock=False, session=db)
+    return repo.get_user_db_permissions(knox_id)
 
 
 @router.put("/main/api/db-permissions/users/{knox_id}")
@@ -440,10 +447,22 @@ async def update_user_db_permissions(
     knox_id: str,
     request: dict,
     _: bool = Depends(require_admin),
+    db: Session = Depends(get_db_session),
 ) -> dict:
-    """사용자 DB 권한 수정"""
+    """사용자 DB 권한 수정 (전체 교체)"""
+    repo = get_permission_repository(use_mock=False, session=db)
     db_ids = request.get("db_ids", [])
-    MOCK_DB_PERMISSIONS[knox_id] = db_ids
+    
+    # 기존 권한 모두 삭제 후 재생성
+    existing = repo.get_user_db_permissions(knox_id)
+    for perm in existing:
+        if perm.get("db_id"):
+            repo.revoke_db_access(knox_id, perm["db_id"])
+    
+    # 새 권한 추가
+    for db_id in db_ids:
+        repo.grant_db_access(knox_id, db_id, can_access=True)
+    
     return {"status": "success", "knox_id": knox_id, "db_ids": db_ids}
 
 
@@ -452,10 +471,9 @@ async def delete_user_db_permission(
     knox_id: str,
     db_id: str,
     _: bool = Depends(require_admin),
+    db: Session = Depends(get_db_session),
 ) -> dict:
     """사용자 특정 DB 권한 삭제"""
-    if knox_id in MOCK_DB_PERMISSIONS:
-        MOCK_DB_PERMISSIONS[knox_id] = [
-            d for d in MOCK_DB_PERMISSIONS[knox_id] if d != db_id
-        ]
+    repo = get_permission_repository(use_mock=False, session=db)
+    repo.revoke_db_access(knox_id, db_id)
     return {"status": "success"}
