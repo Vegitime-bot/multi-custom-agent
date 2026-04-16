@@ -24,6 +24,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadChatbots();
     loadStats();
     setupEventListeners();
+    
+    // 챗봇 추가 버튼에 DB 목록 로드 연결
+    const addBtn = document.getElementById('addChatbotBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            openAddChatbotModal();
+            loadDBSelection();
+        });
+    }
 });
 
 // 현재 사용자 정보 로드
@@ -69,6 +78,38 @@ function closeAddChatbotModal() {
     document.getElementById('parentSelectContainer').classList.add('hidden');
 }
 
+// DB 목록 로드 및 표시
+async function loadDBSelection() {
+    const container = document.getElementById('dbSelectionContainer');
+    if (!container) return;
+    
+    container.innerHTML = '<p class="text-xs text-on-surface-variant">DB 목록을 불러오는 중...</p>';
+    
+    try {
+        const response = await fetch('/main/api/databases');
+        const dbList = await response.json();
+        
+        if (!Array.isArray(dbList) || dbList.length === 0) {
+            container.innerHTML = '<p class="text-xs text-on-surface-variant">사용 가능한 DB가 없습니다</p>';
+            return;
+        }
+        
+        container.innerHTML = '';
+        dbList.forEach(dbId => {
+            const label = document.createElement('label');
+            label.className = 'flex items-center gap-2 cursor-pointer py-1';
+            label.innerHTML = `
+                <input type="checkbox" name="dbSelection" value="${dbId}" class="w-4 h-4 text-primary rounded">
+                <span class="text-sm text-on-surface">${dbId}</span>
+            `;
+            container.appendChild(label);
+        });
+    } catch (error) {
+        console.error('DB 목록 로드 실패:', error);
+        container.innerHTML = '<p class="text-xs text-error">DB 목록 로드 실패</p>';
+    }
+}
+
 // 챗봘 유형 변경 시 상위 선택 표시
 function setupAddChatbotListeners() {
     const typeInputs = document.querySelectorAll('input[name="newChatbotType"]');
@@ -94,6 +135,11 @@ async function saveNewChatbot(event) {
     const parentId = document.getElementById('newChatbotParent').value;
     const systemPrompt = document.getElementById('newChatbotPrompt').value.trim();
     
+    // 선택된 DB 수집
+    const selectedDBs = [];
+    const dbCheckboxes = document.querySelectorAll('input[name="dbSelection"]:checked');
+    dbCheckboxes.forEach(cb => selectedDBs.push(cb.value));
+    
     if (!id || !name) {
         showToast('ID와 이름은 필수입니다', 'error');
         return;
@@ -104,7 +150,7 @@ async function saveNewChatbot(event) {
         name: name,
         description: description,
         active: true,
-        db_ids: [],
+        db_ids: selectedDBs,
         sub_chatbots: [],
         type: type,
         system_prompt: systemPrompt,
