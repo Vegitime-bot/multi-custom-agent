@@ -240,8 +240,8 @@ function switchView(viewName) {
     // Load view-specific data
     if (viewName === 'hierarchy') {
         loadHierarchy();
-    } else if (viewName === 'users') {
-        loadUsers();
+    } else if (viewName === 'permissions') {
+        switchUserTab('restricted');  // 권한 관리 탭 기본값: restricted
     } else if (viewName === 'stats') {
         loadStatsDashboard();
     }
@@ -577,7 +577,7 @@ function collapseAllNodes() {
 // ===== 사용자 권한 뷰 =====
 let currentUserPermissions = [];
 let currentDBPermissions = [];
-let currentUserTab = 'chatbot';
+let currentUserTab = 'restricted';
 
 // 사용자 권한 탭 전환
 function switchUserTab(tab) {
@@ -596,12 +596,118 @@ function switchUserTab(tab) {
         content.classList.add('hidden');
     });
     
-    if (tab === 'chatbot') {
+    // 버튼 텍스트 및 이벤트 변경
+    const addBtn = document.getElementById('addPermissionBtn');
+    const addBtnText = document.getElementById('addPermissionBtnText');
+    
+    if (tab === 'restricted') {
+        document.getElementById('restrictedChatbotsContainer').classList.remove('hidden');
+        loadRestrictedChatbots();
+        if (addBtn) addBtn.onclick = openAddRestrictedModal;
+        if (addBtnText) addBtnText.textContent = 'Restricted 추가';
+    } else if (tab === 'chatbot') {
         document.getElementById('chatbotPermissionsContainer').classList.remove('hidden');
         loadUsers();
+        if (addBtn) addBtn.onclick = openAddPermissionModal;
+        if (addBtnText) addBtnText.textContent = '권한 추가';
     } else {
         document.getElementById('dbPermissionsContainer').classList.remove('hidden');
         loadDBPermissions();
+        if (addBtn) addBtn.onclick = openAddDBPermissionModal;
+        if (addBtnText) addBtnText.textContent = 'DB 권한 추가';
+    }
+}
+
+// Restricted Chatbots 로드
+async function loadRestrictedChatbots() {
+    const container = document.getElementById('restrictedChatbotsList');
+    if (!container) return;
+    
+    container.innerHTML = `
+        <div class="flex justify-center py-20">
+            <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch('/main/api/restricted-chatbots');
+        const data = await response.json();
+        const chatbots = data.chatbots || [];
+        
+        if (chatbots.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-10 border-2 border-dashed border-outline-variant rounded-3xl">
+                    <div class="text-5xl mb-4">🔓</div>
+                    <h3 class="text-lg font-semibold text-on-surface mb-2">제한된 챗봇 없음</h3>
+                    <p class="text-on-surface-variant mb-4">모든 챗봇이 공개되어 있습니다.</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="space-y-2">
+                ${chatbots.map(id => `
+                    <div class="flex items-center justify-between p-4 bg-surface-container-low rounded-xl border border-outline-variant">
+                        <div class="flex items-center gap-3">
+                            <span class="material-symbols-outlined text-error">lock</span>
+                            <span class="font-medium text-on-surface">${id}</span>
+                        </div>
+                        <button onclick="removeRestrictedChatbot('${id}')" 
+                            class="px-4 py-2 rounded-lg text-sm font-medium text-error hover:bg-error/10 transition-colors">
+                            제거
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Restricted chatbots 로드 실패:', error);
+        container.innerHTML = `<div class="text-error py-10 text-center">로드 실패: ${error.message}</div>`;
+    }
+}
+
+// Restricted Chatbot 제거
+async function removeRestrictedChatbot(chatbotId) {
+    if (!confirm(`정말로 ${chatbotId}를 Restricted 목록에서 제거하시겠습니까?`)) return;
+    
+    try {
+        const response = await fetch(`/main/api/restricted-chatbots/${encodeURIComponent(chatbotId)}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('제거 실패');
+        
+        showToast(`${chatbotId}가 Restricted 목록에서 제거되었습니다`, 'success');
+        loadRestrictedChatbots();
+    } catch (error) {
+        showToast('제거 실패: ' + error.message, 'error');
+    }
+}
+
+// Restricted Chatbot 추가 모달 열기
+function openAddRestrictedModal() {
+    const chatbotId = prompt('Restricted로 등록할 챗봇 ID를 입력하세요:');
+    if (!chatbotId || !chatbotId.trim()) return;
+    
+    addRestrictedChatbot(chatbotId.trim());
+}
+
+// Restricted Chatbot 추가
+async function addRestrictedChatbot(chatbotId) {
+    try {
+        const response = await fetch('/main/api/restricted-chatbots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatbot_id: chatbotId })
+        });
+        
+        if (!response.ok) throw new Error('추가 실패');
+        
+        showToast(`${chatbotId}가 Restricted 목록에 추가되었습니다`, 'success');
+        loadRestrictedChatbots();
+    } catch (error) {
+        showToast('추가 실패: ' + error.message, 'error');
     }
 }
 
