@@ -11,6 +11,8 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from backend.managers.chatbot_manager import ChatbotManager
 from backend.config import settings
+from backend.database.session import get_db_session
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["admin"])
 
@@ -104,7 +106,16 @@ async def get_current_user_info(request: Request) -> dict:
     
     if not knox_id:
         print(f"[DEBUG] No knox_id found in session")
-        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+        # 인증 실패 시에도 기본값 반환 (디버깅용)
+        return {
+            "knox_id": "unknown",
+            "name": "Unknown User",
+            "is_admin": False,
+            "session_debug": {
+                "keys": list(request.session.keys()),
+                "data": {k: str(v)[:100] for k, v in request.session.items()}
+            }
+        }
     
     is_admin = knox_id in settings.ADMIN_USER_IDS
     print(f"[DEBUG] knox_id: {knox_id}, is_admin: {is_admin}")
