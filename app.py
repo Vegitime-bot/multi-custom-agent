@@ -12,6 +12,17 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 import base64
 import json
+import logging
+
+# 전역 로깅 레벨 설정 (DEBUG)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='[%(asctime)s] [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+# 기본 로거 레벨 설정
+for handler in logging.getLogger().handlers:
+    handler.setLevel(logging.DEBUG)
 
 from config import settings
 from backend.api.admin import router as admin_router
