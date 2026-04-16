@@ -603,8 +603,9 @@ function switchUserTab(tab) {
     if (tab === 'restricted') {
         document.getElementById('restrictedChatbotsContainer').classList.remove('hidden');
         loadRestrictedChatbots();
-        if (addBtn) addBtn.onclick = openAddRestrictedModal;
-        if (addBtnText) addBtnText.textContent = 'Restricted 추가';
+        loadRestrictedChatbotOptions(); // 드롭다운 옵션도 로드
+        if (addBtn) addBtn.style.display = 'none'; // 기존 버튼 숨김
+        if (addBtnText) addBtnText.textContent = '';
     } else if (tab === 'chatbot') {
         document.getElementById('chatbotPermissionsContainer').classList.remove('hidden');
         loadUsers();
@@ -685,13 +686,45 @@ async function removeRestrictedChatbot(chatbotId) {
     }
 }
 
-// Restricted Chatbot 추가 (입력 필드에서)
-async function addRestrictedChatbotFromInput() {
-    const input = document.getElementById('restrictedChatbotInput');
-    const chatbotId = input?.value.trim();
+// Restricted Chatbot 드롭다운 옵션 로드
+async function loadRestrictedChatbotOptions() {
+    const select = document.getElementById('restrictedChatbotSelect');
+    if (!select) return;
+    
+    // 기존 옵션 유지 ("챗봇 선택...")
+    select.innerHTML = '<option value="">챗봇 선택...</option>';
+    
+    try {
+        // 전체 챗봇 목록 로드
+        const response = await fetch('/api/chatbots');
+        const chatbots = await response.json();
+        
+        // 현재 restricted 목록 확인
+        const restrictedResp = await fetch('/main/api/restricted-chatbots');
+        const restrictedData = await restrictedResp.json();
+        const restrictedIds = new Set(restrictedData.chatbots || []);
+        
+        // Restricted가 아닌 챗봇만 표시
+        chatbots.forEach(cb => {
+            if (!restrictedIds.has(cb.id)) {
+                const option = document.createElement('option');
+                option.value = cb.id;
+                option.textContent = `${cb.name} (${cb.id})`;
+                select.appendChild(option);
+            }
+        });
+    } catch (error) {
+        console.error('챗봇 옵션 로드 실패:', error);
+    }
+}
+
+// Restricted Chatbot 추가 (드롭다운에서)
+async function addRestrictedChatbotFromSelect() {
+    const select = document.getElementById('restrictedChatbotSelect');
+    const chatbotId = select?.value;
     
     if (!chatbotId) {
-        showToast('챗봇 ID를 입력해주세요', 'error');
+        showToast('챗봇을 선택해주세요', 'error');
         return;
     }
     
@@ -705,12 +738,16 @@ async function addRestrictedChatbotFromInput() {
         if (!response.ok) throw new Error('추가 실패');
         
         showToast(`${chatbotId}가 Restricted 목록에 추가되었습니다`, 'success');
-        input.value = ''; // 입력 필드 초기화
+        select.value = ''; // 드롭다운 초기화
         loadRestrictedChatbots(); // 목록 새로고침
+        loadRestrictedChatbotOptions(); // 옵션 새로고침
     } catch (error) {
         showToast('추가 실패: ' + error.message, 'error');
     }
 }
+
+// 전역으로 노출 (HTML onclick에서 접근 가능하도록)
+window.addRestrictedChatbotFromSelect = addRestrictedChatbotFromSelect;
 
 // Restricted Chatbot 추가 모달 열기 (deprecated, but kept for compatibility)
 function openAddRestrictedModal() {

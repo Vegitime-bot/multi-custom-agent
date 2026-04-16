@@ -156,8 +156,19 @@ def get_user_permissions(user: dict) -> dict:
     return MOCK_USER_PERMISSIONS.get("user-001", {})
 
 
+def load_restricted_chatbots() -> set[str]:
+    """파일에서 제한된 챗봇 목록 로드"""
+    import json
+    from pathlib import Path
+    file_path = Path(__file__).parent.parent.parent / "data" / "restricted_chatbots.json"
+    if file_path.exists():
+        data = json.loads(file_path.read_text())
+        return set(data.get("chatbots", []))
+    return set()
+
+
 # 제한된 챗봇 목록 (이 챗봇들만 권한 체크)
-RESTRICTED_CHATBOTS: set[str] = set()  # 여기에 ID 추가: {"chatbot-secret", "chatbot-private"}
+RESTRICTED_CHATBOTS: set[str] = load_restricted_chatbots()
 
 
 def check_chatbot_access(permissions: dict, chatbot_id: str) -> bool:

@@ -544,9 +544,7 @@ async def add_restricted_chatbot(
     chatbots.add(chatbot_id)
     save_restricted_chatbots(chatbots)
     
-    # chat.py의 전역 변수도 업데이트
-    from backend.api import chat
-    chat.RESTRICTED_CHATBOTS.add(chatbot_id)
+    # 참고: chat.py는 파일에서 restricted_chatbots.json을 다시 로드함
     
     return {"status": "success", "chatbot_id": chatbot_id}
 
@@ -560,9 +558,6 @@ async def remove_restricted_chatbot(
     if chatbot_id in chatbots:
         chatbots.discard(chatbot_id)
         save_restricted_chatbots(chatbots)
-        
-        # chat.py의 전역 변수도 업데이트
-        from backend.api import chat
-        chat.RESTRICTED_CHATBOTS.discard(chatbot_id)
+        # 참고: chat.py는 파일에서 restricted_chatbots.json을 다시 로드함
     
     return {"status": "success", "chatbot_id": chatbot_id}

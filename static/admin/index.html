@@ -242,9 +242,11 @@
                     
                     <!-- 추가 입력 폼 -->
                     <div class="flex gap-3 mb-6">
-                        <input type="text" id="restrictedChatbotInput" placeholder="챗봇 ID 입력 (예: chatbot-secret)"
-                            class="flex-1 px-4 py-3 rounded-xl border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all">
-                        <button onclick="addRestrictedChatbotFromInput()" 
+                        <select id="restrictedChatbotSelect" 
+                            class="flex-1 px-4 py-3 rounded-xl border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all bg-white">
+                            <option value="">챗봇 선택...</option>
+                        </select>
+                        <button onclick="addRestrictedChatbotFromSelect()" 
                             class="px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary-container hover:opacity-90 transition-opacity flex items-center gap-2">
                             <span class="material-symbols-outlined text-base">add</span> 추가
                         </button>
