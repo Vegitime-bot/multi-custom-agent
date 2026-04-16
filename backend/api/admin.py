@@ -397,34 +397,33 @@ async def get_stats(
 # ── DB 목록 ─────────────────────────────────────────────────────────
 @router.get("/main/api/databases")
 async def list_databases(
-    chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
-    db: Session = Depends(get_db_session),
+    request: Request,
 ) -> List[str]:
     """
-    모든 사용 가능한 DB ID 목록 반환
-    - 챗봇 JSON의 db_ids
-    - PostgreSQL user_db_access 테이블의 db_id
+    Ingestion 서버에서 실제 인덱스 목록 가져오기
     """
-    db_ids = set()
-    
-    # 1. 챗봇 JSON에서 DB 목록 수집
-    all_defs = chatbot_mgr.list_all()
-    for chatbot in all_defs:
-        if chatbot.retrieval and chatbot.retrieval.db_ids:
-            db_ids.update(chatbot.retrieval.db_ids)
-    
-    # 2. PostgreSQL user_db_access 테이블에서 DB 목록 수집
     try:
-        from backend.permissions.repository import get_permission_repository
-        repo = get_permission_repository(use_mock=False, session=db)
-        all_perms = repo.get_all_db_permissions(limit=10000)
-        for perm in all_perms:
-            if perm.get("db_id"):
-                db_ids.add(perm["db_id"])
+        ingestion_client = request.app.state.ingestion_client
+        # Ingestion 서버에서 /indices API 호출
+        resp = ingestion_client._session.get(
+            f"{ingestion_client._base_url}/indices",
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        indices = data.get("indices", [])
+        print(f"[DEBUG] Ingestion indices loaded: {len(indices)} items")
+        return sorted(indices)
     except Exception as e:
-        print(f"[WARNING] DB 권한 테이블 조회 실패: {e}")
-    
-    return sorted(list(db_ids))
+        print(f"[WARNING] Ingestion indices 로드 실패: {e}")
+        # Fallback: 기존 방식으로
+        chatbot_mgr = request.app.state.chatbot_manager
+        all_defs = chatbot_mgr.list_all()
+        db_ids = set()
+        for chatbot in all_defs:
+            if chatbot.retrieval and chatbot.retrieval.db_ids:
+                db_ids.update(chatbot.retrieval.db_ids)
+        return sorted(list(db_ids))
 
 
 # ── DB 권한 관리 (PostgreSQL) ───────────────────────────────────
