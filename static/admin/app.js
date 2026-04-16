@@ -686,7 +686,7 @@ async function removeRestrictedChatbot(chatbotId) {
 }
 
 // Restricted Chatbot 추가 (입력 필드에서)
-function addRestrictedChatbotFromInput() {
+async function addRestrictedChatbotFromInput() {
     const input = document.getElementById('restrictedChatbotInput');
     const chatbotId = input?.value.trim();
     
@@ -695,9 +695,21 @@ function addRestrictedChatbotFromInput() {
         return;
     }
     
-    addRestrictedChatbot(chatbotId).then(() => {
+    try {
+        const response = await fetch('/main/api/restricted-chatbots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatbot_id: chatbotId })
+        });
+        
+        if (!response.ok) throw new Error('추가 실패');
+        
+        showToast(`${chatbotId}가 Restricted 목록에 추가되었습니다`, 'success');
         input.value = ''; // 입력 필드 초기화
-    });
+        loadRestrictedChatbots(); // 목록 새로고침
+    } catch (error) {
+        showToast('추가 실패: ' + error.message, 'error');
+    }
 }
 
 // Restricted Chatbot 추가 모달 열기 (deprecated, but kept for compatibility)
