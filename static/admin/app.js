@@ -624,7 +624,7 @@ async function loadDBPermissions() {
     `;
     
     try {
-        const response = await fetch('/main/main/api/db-permissions/admin/stats');
+        const response = await fetch('/main/api/db-permissions/admin/stats');
         if (!response.ok) throw new Error('DB 권한 API 응답 오류');
         
         const stats = await response.json();

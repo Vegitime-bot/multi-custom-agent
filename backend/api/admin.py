@@ -399,3 +399,63 @@ async def list_databases(
             db_ids.update(chatbot.retrieval.db_ids)
     
     return sorted(list(db_ids))
+
+
+# ── DB 권한 관리 (Mock) ───────────────────────────────────────────
+# TODO: 실제 DB 권한 테이블 구현 필요 (현재는 Mock 데이터)
+MOCK_DB_PERMISSIONS: dict[str, list[str]] = {}  # knox_id -> [db_id, db_id, ...]
+
+
+@router.get("/main/api/db-permissions/admin/stats")
+async def get_db_permission_stats(
+    _: bool = Depends(require_admin),
+) -> dict:
+    """
+    DB 권한 통계 조회 (관리자용)
+    """
+    user_stats = {}
+    for knox_id, db_list in MOCK_DB_PERMISSIONS.items():
+        user_stats[knox_id] = {
+            "accessible": len(db_list),
+            "total": len(db_list),  # 전체 DB 수 필요 시 계산
+        }
+    
+    return {
+        "user_stats": user_stats,
+        "total_users": len(MOCK_DB_PERMISSIONS),
+    }
+
+
+@router.get("/main/api/db-permissions/users/{knox_id}")
+async def get_user_db_permissions(
+    knox_id: str,
+    _: bool = Depends(require_admin),
+) -> list[str]:
+    """특정 사용자의 DB 권한 목록 조회"""
+    return MOCK_DB_PERMISSIONS.get(knox_id, [])
+
+
+@router.put("/main/api/db-permissions/users/{knox_id}")
+async def update_user_db_permissions(
+    knox_id: str,
+    request: dict,
+    _: bool = Depends(require_admin),
+) -> dict:
+    """사용자 DB 권한 수정"""
+    db_ids = request.get("db_ids", [])
+    MOCK_DB_PERMISSIONS[knox_id] = db_ids
+    return {"status": "success", "knox_id": knox_id, "db_ids": db_ids}
+
+
+@router.delete("/main/api/db-permissions/users/{knox_id}/dbs/{db_id}")
+async def delete_user_db_permission(
+    knox_id: str,
+    db_id: str,
+    _: bool = Depends(require_admin),
+) -> dict:
+    """사용자 특정 DB 권한 삭제"""
+    if knox_id in MOCK_DB_PERMISSIONS:
+        MOCK_DB_PERMISSIONS[knox_id] = [
+            d for d in MOCK_DB_PERMISSIONS[knox_id] if d != db_id
+        ]
+    return {"status": "success"}

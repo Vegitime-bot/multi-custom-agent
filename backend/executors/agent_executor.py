@@ -43,18 +43,28 @@ class AgentExecutor(BaseExecutor):
         Yields:
             LLM 응답 청크
         """
+        print(f"[DEBUG AgentExecutor] execute called: chatbot={self.chatbot_def.id}, session={session_id}")
+        print(f"[DEBUG AgentExecutor] retrieval.db_ids: {self.chatbot_def.retrieval.db_ids}")
+        
         # 1. 메모리에서 히스토리 복원
         history = self.memory.get_history(self.chatbot_def.id, session_id)
+        print(f"[DEBUG AgentExecutor] history loaded: {len(history)} messages")
 
         # 2. RAG 검색 (DB 스코프 적용)
+        print(f"[DEBUG AgentExecutor] calling _retrieve with query: {message[:50]}...")
         context = self._retrieve(
             query=message,
             db_ids=self.chatbot_def.retrieval.db_ids,
         )
+        print(f"[DEBUG AgentExecutor] _retrieve returned context length: {len(context)}")
 
-        # 2.5 Confidence 체크 - 검색 결과가 부족하거나 정책 질문인 경우 상위 Agent에게 위임 안내
+        # 2.5 Confidence 체크
         confidence = self._calculate_confidence(context, message)
+        print(f"[DEBUG AgentExecutor] confidence: {confidence}, context length: {len(context)}")
         
+        # DEBUG: 임시로 fallback 제거 (검색 테스트용)
+        # 실제 운영 시에는 아래 로직 활성화 필요
+        """
         # 정책/규정 관련 키워드 체크
         policy_keywords = ['규정', '정책', '제도', '지침', '방침', '법규']
         is_policy_question = any(kw in message for kw in policy_keywords)
@@ -65,7 +75,6 @@ class AgentExecutor(BaseExecutor):
                 "인사정책 전문 챗봇에게 문의해 주세요."
             )
             yield fallback_msg
-            # 메모리에도 저장
             self.memory.append_pair(
                 chatbot_id=self.chatbot_def.id,
                 session_id=session_id,
@@ -74,6 +83,7 @@ class AgentExecutor(BaseExecutor):
                 max_messages=self.chatbot_def.memory.max_messages,
             )
             return
+        """
 
         # 3. 메시지 구성 (히스토리 포함 - Agent 특성)
         messages = self._build_messages_with_history(
