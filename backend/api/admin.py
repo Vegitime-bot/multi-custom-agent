@@ -398,16 +398,31 @@ async def get_stats(
 @router.get("/main/api/databases")
 async def list_databases(
     chatbot_mgr: ChatbotManager = Depends(get_chatbot_manager),
+    db: Session = Depends(get_db_session),
 ) -> List[str]:
     """
-    모든 챗봇에서 사용 중인 DB ID 목록 반환
+    모든 사용 가능한 DB ID 목록 반환
+    - 챗봇 JSON의 db_ids
+    - PostgreSQL user_db_access 테이블의 db_id
     """
-    all_defs = chatbot_mgr.list_all()
     db_ids = set()
     
+    # 1. 챗봇 JSON에서 DB 목록 수집
+    all_defs = chatbot_mgr.list_all()
     for chatbot in all_defs:
         if chatbot.retrieval and chatbot.retrieval.db_ids:
             db_ids.update(chatbot.retrieval.db_ids)
+    
+    # 2. PostgreSQL user_db_access 테이블에서 DB 목록 수집
+    try:
+        from backend.permissions.repository import get_permission_repository
+        repo = get_permission_repository(use_mock=False, session=db)
+        all_perms = repo.get_all_db_permissions(limit=10000)
+        for perm in all_perms:
+            if perm.get("db_id"):
+                db_ids.add(perm["db_id"])
+    except Exception as e:
+        print(f"[WARNING] DB 권한 테이블 조회 실패: {e}")
     
     return sorted(list(db_ids))
 
