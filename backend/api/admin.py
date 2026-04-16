@@ -404,9 +404,10 @@ async def list_databases(
     """
     try:
         ingestion_client = request.app.state.ingestion_client
-        # Ingestion 서버에서 indices 엔드포인트 호출 (슬래시 없이)
+        # Ingestion 서버에서 /indices 엔드포인트 호출
+        base_url = ingestion_client._base_url.rstrip("/")
         resp = ingestion_client._session.get(
-            f"{ingestion_client._base_url}indices",
+            f"{base_url}/indices",
             timeout=10,
         )
         resp.raise_for_status()
