@@ -685,12 +685,24 @@ async function removeRestrictedChatbot(chatbotId) {
     }
 }
 
-// Restricted Chatbot 추가 모달 열기
-function openAddRestrictedModal() {
-    const chatbotId = prompt('Restricted로 등록할 챗봇 ID를 입력하세요:');
-    if (!chatbotId || !chatbotId.trim()) return;
+// Restricted Chatbot 추가 (입력 필드에서)
+function addRestrictedChatbotFromInput() {
+    const input = document.getElementById('restrictedChatbotInput');
+    const chatbotId = input?.value.trim();
     
-    addRestrictedChatbot(chatbotId.trim());
+    if (!chatbotId) {
+        showToast('챗봇 ID를 입력해주세요', 'error');
+        return;
+    }
+    
+    addRestrictedChatbot(chatbotId).then(() => {
+        input.value = ''; // 입력 필드 초기화
+    });
+}
+
+// Restricted Chatbot 추가 모달 열기 (deprecated, but kept for compatibility)
+function openAddRestrictedModal() {
+    addRestrictedChatbotFromInput();
 }
 
 // Restricted Chatbot 추가

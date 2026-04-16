@@ -235,10 +235,21 @@
             <!-- Restricted Chatbots 컨테이너 -->
             <div id="restrictedChatbotsContainer" class="user-tab-content">
                 <div class="bg-white rounded-2xl p-8 shadow-sm border border-outline-variant">
-                    <div class="mb-4">
+                    <div class="mb-6">
                         <h4 class="text-lg font-semibold text-on-surface">Restricted Chatbots</h4>
                         <p class="text-sm text-on-surface-variant mt-1">이 목록에 있는 챗봇은 접근 권한이 필요합니다. 목록에 없는 챗봇은 누구나 접근 가능합니다.</p>
                     </div>
+                    
+                    <!-- 추가 입력 폼 -->
+                    <div class="flex gap-3 mb-6">
+                        <input type="text" id="restrictedChatbotInput" placeholder="챗봇 ID 입력 (예: chatbot-secret)"
+                            class="flex-1 px-4 py-3 rounded-xl border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all">
+                        <button onclick="addRestrictedChatbotFromInput()" 
+                            class="px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary-container hover:opacity-90 transition-opacity flex items-center gap-2">
+                            <span class="material-symbols-outlined text-base">add</span> 추가
+                        </button>
+                    </div>
+                    
                     <div id="restrictedChatbotsList">
                         <div class="flex justify-center py-20">
                             <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
