@@ -62,14 +62,19 @@ class IngestionClient:
             payload["filter_metadata"] = filter_metadata
 
         try:
+            print(f"[DEBUG IngestionClient] POST {self._base_url}/search")
+            print(f"[DEBUG IngestionClient] payload: {payload}")
             resp = self._session.post(
                 f"{self._base_url}/search",
                 json=payload,
                 timeout=30,
             )
-            resp.raise_for_status()
+            print(f"[DEBUG IngestionClient] response status: {resp.status_code}")
             data = resp.json()
-            return data.get("results", data if isinstance(data, list) else [])
+            print(f"[DEBUG IngestionClient] response data keys: {list(data.keys()) if isinstance(data, dict) else 'list'}")
+            results = data.get("results", data if isinstance(data, list) else [])
+            print(f"[DEBUG IngestionClient] results count: {len(results)}")
+            return results
         except requests.exceptions.HTTPError as e:
             # HTTP 에러 (403 Forbidden 등)
             status = e.response.status_code if e.response else "unknown"
