@@ -1156,7 +1156,10 @@ async function saveChatbotDBs(chatbotId) {
             name: chatbot.name,
             description: chatbot.description,
             active: chatbot.active,
-            db_ids: selectedDBs,
+            capabilities: {
+                ...chatbot.capabilities,
+                db_ids: selectedDBs
+            },
             system_prompt: chatbot.system_prompt,
             parent_id: chatbot.parent_id,
             policy: chatbot.policy
