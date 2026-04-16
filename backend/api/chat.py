@@ -156,14 +156,24 @@ def get_user_permissions(user: dict) -> dict:
     return MOCK_USER_PERMISSIONS.get("user-001", {})
 
 
+# 제한된 챗봇 목록 (이 챗봇들만 권한 체크)
+RESTRICTED_CHATBOTS: set[str] = set()  # 여기에 ID 추가: {"chatbot-secret", "chatbot-private"}
+
+
 def check_chatbot_access(permissions: dict, chatbot_id: str) -> bool:
-    """챗봇 접근 권한 확인"""
+    """챗봇 접근 권한 확인 - 기본 허용, 특정 챗봇만 체크"""
     # Test chatbots always allowed
     if chatbot_id.startswith("test-"):
         return True
     # Mock mode: allow all chatbots by default (for development)
     if settings.USE_MOCK_AUTH:
         return True
+    
+    # 제한된 챗봇이 아니면 기본적으로 허용
+    if chatbot_id not in RESTRICTED_CHATBOTS:
+        return True
+    
+    # 제한된 챗봇만 권한 체크
     bot_perm = permissions.get(chatbot_id, {})
     return bot_perm.get("access", False)
 

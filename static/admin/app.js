@@ -381,9 +381,11 @@ function createCardHTML(chatbot) {
                 <button onclick="startChat('${chatbot.id}')" class="w-10 h-10 flex items-center justify-center rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors" title="채팅하기">
                     <span class="material-symbols-outlined text-lg">chat</span>
                 </button>
+                ${isAdmin ? `
                 <button onclick="openDeleteModal('${chatbot.id}', '${chatbot.name}')" class="w-10 h-10 flex items-center justify-center rounded-xl bg-error/10 text-error hover:bg-error hover:text-white transition-colors" title="삭제">
                     <span class="material-symbols-outlined text-lg">delete</span>
                 </button>
+                ` : ''}
             </div>
         </div>
     `;
