@@ -503,3 +503,66 @@ async def delete_user_db_permission(
     repo = get_permission_repository(use_mock=False, session=db)
     repo.revoke_db_access(knox_id, db_id)
     return {"status": "success"}
+
+
+# ── Restricted Chatbots 관리 ───────────────────────────────────
+RESTRICTED_CHATBOTS_FILE = Path(__file__).parent.parent.parent / "data" / "restricted_chatbots.json"
+
+def load_restricted_chatbots() -> set[str]:
+    """제한된 챗봇 목록 로드"""
+    if RESTRICTED_CHATBOTS_FILE.exists():
+        data = json.loads(RESTRICTED_CHATBOTS_FILE.read_text())
+        return set(data.get("chatbots", []))
+    return set()
+
+def save_restricted_chatbots(chatbots: set[str]):
+    """제한된 챗봇 목록 저장"""
+    RESTRICTED_CHATBOTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    RESTRICTED_CHATBOTS_FILE.write_text(json.dumps({
+        "chatbots": sorted(list(chatbots))
+    }, indent=2))
+
+@router.get("/main/api/restricted-chatbots")
+async def get_restricted_chatbots(
+    _: bool = Depends(require_admin),
+) -> dict:
+    """제한된 챗봇 목록 조회"""
+    chatbots = load_restricted_chatbots()
+    return {"chatbots": sorted(list(chatbots))}
+
+@router.post("/main/api/restricted-chatbots")
+async def add_restricted_chatbot(
+    request: dict,
+    _: bool = Depends(require_admin),
+) -> dict:
+    """제한된 챗봇 추가"""
+    chatbot_id = request.get("chatbot_id")
+    if not chatbot_id:
+        raise HTTPException(status_code=400, detail="chatbot_id is required")
+    
+    chatbots = load_restricted_chatbots()
+    chatbots.add(chatbot_id)
+    save_restricted_chatbots(chatbots)
+    
+    # chat.py의 전역 변수도 업데이트
+    from backend.api import chat
+    chat.RESTRICTED_CHATBOTS.add(chatbot_id)
+    
+    return {"status": "success", "chatbot_id": chatbot_id}
+
+@router.delete("/main/api/restricted-chatbots/{chatbot_id}")
+async def remove_restricted_chatbot(
+    chatbot_id: str,
+    _: bool = Depends(require_admin),
+) -> dict:
+    """제한된 챗봇 제거"""
+    chatbots = load_restricted_chatbots()
+    if chatbot_id in chatbots:
+        chatbots.discard(chatbot_id)
+        save_restricted_chatbots(chatbots)
+        
+        # chat.py의 전역 변수도 업데이트
+        from backend.api import chat
+        chat.RESTRICTED_CHATBOTS.discard(chatbot_id)
+    
+    return {"status": "success", "chatbot_id": chatbot_id}

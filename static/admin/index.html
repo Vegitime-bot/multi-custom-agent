@@ -95,9 +95,9 @@
                 <span class="material-symbols-outlined">account_tree</span>
                 <span class="font-medium text-sm">Agent 계층</span>
             </a>
-            <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all duration-200" data-view="users" onclick="switchView('users')">
-                <span class="material-symbols-outlined">group</span>
-                <span class="font-medium text-sm">사용자 권한</span>
+            <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all duration-200" data-view="permissions" onclick="switchView('permissions')">
+                <span class="material-symbols-outlined">admin_panel_settings</span>
+                <span class="font-medium text-sm">권한 관리</span>
             </a>
             <a href="#" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-all duration-200" data-view="stats" onclick="switchView('stats')">
                 <span class="material-symbols-outlined">monitoring</span>
@@ -218,28 +218,44 @@
             </div>
         </div>
 
-        <!-- VIEW: 사용자 권한 -->
-        <div id="view-users" class="view hidden">
-            <!-- 사용자 권한 헤더 -->
+        <!-- VIEW: 권한 관리 -->
+        <div id="view-permissions" class="view hidden">
+            <!-- 권한 관리 헤더 -->
             <div class="flex items-center justify-between mb-6">
                 <div class="flex gap-2">
-                    <button class="user-tab active px-5 py-2.5 rounded-full text-sm font-medium bg-primary text-white transition-all" data-user-tab="chatbot" onclick="switchUserTab('chatbot')">챗봇 권한</button>
+                    <button class="user-tab active px-5 py-2.5 rounded-full text-sm font-medium bg-primary text-white transition-all" data-user-tab="restricted" onclick="switchUserTab('restricted')">Restricted Chatbots</button>
+                    <button class="user-tab px-5 py-2.5 rounded-full text-sm font-medium bg-white text-slate-600 hover:bg-slate-100 border border-outline-variant transition-all" data-user-tab="chatbot" onclick="switchUserTab('chatbot')">사용자-챗봇 권한</button>
                     <button class="user-tab px-5 py-2.5 rounded-full text-sm font-medium bg-white text-slate-600 hover:bg-slate-100 border border-outline-variant transition-all" data-user-tab="db" onclick="switchUserTab('db')">DB 권한</button>
                 </div>
-                <button onclick="openAddPermissionModal()" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary-container hover:opacity-90 transition-opacity flex items-center gap-2">
-                    <span class="material-symbols-outlined text-base">add</span> 권한 추가
+                <button id="addPermissionBtn" onclick="openAddPermissionModal()" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary-container hover:opacity-90 transition-opacity flex items-center gap-2">
+                    <span class="material-symbols-outlined text-base">add</span> <span id="addPermissionBtnText">추가</span>
                 </button>
             </div>
-            
+
+            <!-- Restricted Chatbots 컨테이너 -->
+            <div id="restrictedChatbotsContainer" class="user-tab-content">
+                <div class="bg-white rounded-2xl p-8 shadow-sm border border-outline-variant">
+                    <div class="mb-4">
+                        <h4 class="text-lg font-semibold text-on-surface">Restricted Chatbots</h4>
+                        <p class="text-sm text-on-surface-variant mt-1">이 목록에 있는 챗봇은 접근 권한이 필요합니다. 목록에 없는 챗봇은 누구나 접근 가능합니다.</p>
+                    </div>
+                    <div id="restrictedChatbotsList">
+                        <div class="flex justify-center py-20">
+                            <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 챗봇 권한 컨테이너 -->
-            <div id="chatbotPermissionsContainer" class="user-tab-content">
+            <div id="chatbotPermissionsContainer" class="user-tab-content hidden">
                 <div class="bg-white rounded-2xl p-8 shadow-sm border border-outline-variant" id="permissionsContainer">
                     <div class="flex justify-center py-20">
                         <div class="animate-spin w-10 h-10 border-3 border-primary/20 border-t-primary rounded-full"></div>
                     </div>
                 </div>
             </div>
-            
+
             <!-- DB 권한 컨테이너 -->
             <div id="dbPermissionsContainer" class="user-tab-content hidden">
                 <div class="bg-white rounded-2xl p-8 shadow-sm border border-outline-variant" id="dbPermissionsList">
