@@ -28,18 +28,26 @@ def require_admin(request: Request):
     if settings.USE_MOCK_AUTH:
         return True
     
-    # SSO 세션에서 사용자 ID 확인
-    sso_data = request.session.get('sso')
-    if not sso_data:
-        raise HTTPException(status_code=401, detail="인증이 필요합니다")
-    
-    # SSO 데이터에서 knox_id 추출
     knox_id = None
-    if isinstance(sso_data, dict):
-        knox_id = sso_data.get('knox_id') or sso_data.get('email') or sso_data.get('sub')
+    
+    # 방법 1: 직접 knox_id가 세션에 있는 경우
+    if 'knox_id' in request.session:
+        knox_id = request.session['knox_id']
+    
+    # 방법 2: sso 래퍼 안에 있는 경우
+    elif 'sso' in request.session:
+        sso_data = request.session['sso']
+        if isinstance(sso_data, dict):
+            knox_id = sso_data.get('knox_id') or sso_data.get('email') or sso_data.get('sub')
+    
+    # 방법 3: user 래퍼 안에 있는 경우
+    elif 'user' in request.session:
+        user_data = request.session['user']
+        if isinstance(user_data, dict):
+            knox_id = user_data.get('knox_id') or user_data.get('id') or user_data.get('email')
     
     if not knox_id:
-        raise HTTPException(status_code=401, detail="사용자 정보를 확인할 수 없습니다")
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
     
     # 관리자 ID 목록에 있는지 확인
     if knox_id not in settings.ADMIN_USER_IDS:
@@ -61,40 +69,46 @@ async def get_current_user_info(request: Request) -> dict:
             "is_admin": True
         }
     
-    # SSO
-    sso_data = request.session.get('sso')
-    
-    # 디버그 로그
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"[DEBUG] SSO Session Data: {sso_data}")
-    logger.info(f"[DEBUG] Session keys: {list(request.session.keys())}")
-    
-    if not sso_data:
-        raise HTTPException(status_code=401, detail="인증이 필요합니다")
+    # 디버그: 세션 전체 출력
+    print(f"[DEBUG] Session keys: {list(request.session.keys())}")
+    print(f"[DEBUG] Session data: {dict(request.session)}")
     
     knox_id = None
     name = "Unknown"
     
-    if isinstance(sso_data, dict):
-        # 가능한 모든 필드에서 knox_id 추출 시도
-        possible_keys = ['knox_id', 'email', 'sub', 'preferred_username', 'username', 'user_id', 'id']
-        for key in possible_keys:
-            if sso_data.get(key):
-                knox_id = sso_data.get(key)
-                logger.info(f"[DEBUG] Found ID from key '{key}': {knox_id}")
-                break
-        
-        name = sso_data.get('name') or sso_data.get('display_name') or sso_data.get('preferred_username') or knox_id
+    # 방법 1: 직접 knox_id가 세션에 있는 경우
+    if 'knox_id' in request.session:
+        knox_id = request.session['knox_id']
+        print(f"[DEBUG] Found knox_id directly: {knox_id}")
     
-    logger.info(f"[DEBUG] Extracted knox_id: {knox_id}")
-    logger.info(f"[DEBUG] ADMIN_USER_IDS: {settings.ADMIN_USER_IDS}")
-    logger.info(f"[DEBUG] Is admin: {knox_id in settings.ADMIN_USER_IDS}")
+    # 방법 2: sso 래퍼 안에 있는 경우
+    elif 'sso' in request.session:
+        sso_data = request.session['sso']
+        print(f"[DEBUG] SSO data: {sso_data}")
+        if isinstance(sso_data, dict):
+            possible_keys = ['knox_id', 'email', 'sub', 'preferred_username', 'username', 'user_id', 'id']
+            for key in possible_keys:
+                if sso_data.get(key):
+                    knox_id = sso_data.get(key)
+                    print(f"[DEBUG] Found ID from sso.{key}: {knox_id}")
+                    break
+            name = sso_data.get('name') or sso_data.get('display_name') or sso_data.get('preferred_username') or knox_id
+    
+    # 방법 3: user 래퍼 안에 있는 경우
+    elif 'user' in request.session:
+        user_data = request.session['user']
+        print(f"[DEBUG] User data: {user_data}")
+        if isinstance(user_data, dict):
+            knox_id = user_data.get('knox_id') or user_data.get('id') or user_data.get('email')
+            name = user_data.get('name') or knox_id
     
     if not knox_id:
-        raise HTTPException(status_code=401, detail="사용자 정보를 확인할 수 없습니다")
+        print(f"[DEBUG] No knox_id found in session")
+        raise HTTPException(status_code=401, detail="인증이 필요합니다")
     
     is_admin = knox_id in settings.ADMIN_USER_IDS
+    print(f"[DEBUG] knox_id: {knox_id}, is_admin: {is_admin}")
+    print(f"[DEBUG] ADMIN_USER_IDS: {settings.ADMIN_USER_IDS}")
     
     return {
         "knox_id": knox_id,
