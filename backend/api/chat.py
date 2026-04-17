@@ -331,6 +331,7 @@ def list_active_chatbots(
             "sub_chatbots": [{"id": s.id, "level": s.level} for s in c.sub_chatbots] if c.sub_chatbots else [],
             "parent_id": c.parent_id,
             "policy": c.policy if c.policy else {},
+            "keywords": c.keywords if c.keywords else [],
         }
         for c in manager.list_active()
     ]

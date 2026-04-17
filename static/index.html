@@ -250,7 +250,13 @@
         multiSubToggle.style.display = 'none';
         multiSubCheckbox.checked = false;
       }
-      addSystemMsg(`챗봇 "${selector.options[selector.selectedIndex].text}" 선택됨`);
+      
+      // keywords 표시
+      let displayText = `챗봇 "${selector.options[selector.selectedIndex].text}" 선택됨`;
+      if (selectedBot && selectedBot.keywords && selectedBot.keywords.length > 0) {
+        displayText += `\n🔍 검색 키워드: ${selectedBot.keywords.join(', ')}`;
+      }
+      addSystemMsg(displayText);
     } else {
       multiSubToggle.style.display = 'none';
     }
