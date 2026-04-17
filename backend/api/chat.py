@@ -205,18 +205,41 @@ def check_chatbot_access(permissions: dict, chatbot_id: str) -> bool:
 
 
 def check_mode_permission(permissions: dict, chatbot_id: str, mode: str) -> bool:
-    """특정 mode 사용 권한 확인"""
+    """특정 mode 사용 권한 확인 - 기본 허용, 제한된 챗봇만 체크
+    
+    정책:
+    1. RESTRICTED_CHATBOTS가 비어있으면 → 모든 모드 허용
+    2. 제한된 챗봇이 아니면 → 모든 모드 허용
+    3. 제한된 챗봇만 → DB의 allowed_modes 조회 후 확인
+    """
     # Test chatbots always allowed all modes
     if chatbot_id.startswith("test-"):
         return True
+    
     # Mock mode: allow all modes by default (for development)
     if settings.USE_MOCK_AUTH:
         return True
+    
+    # ★ 핵심 수정: 제한된 챗봇 목록이 비어있으면 모든 모드 허용
+    if not RESTRICTED_CHATBOTS:
+        logger.debug(f"[check_mode_permission] RESTRICTED_CHATBOTS 비어있음 → {chatbot_id}/{mode} 허용")
+        return True
+    
+    # 제한된 챗봇이 아니면 모든 모드 허용
+    if chatbot_id not in RESTRICTED_CHATBOTS:
+        logger.debug(f"[check_mode_permission] {chatbot_id}는 제한 목록에 없음 → {mode} 허용")
+        return True
+    
+    # 제한된 챗봇만 모드 권한 체크
     bot_perm = permissions.get(chatbot_id, {})
     if not bot_perm.get("access", False):
+        logger.warning(f"[check_mode_permission] {chatbot_id} 접근 권한 없음 → {mode} 차단")
         return False
+    
     allowed = bot_perm.get("allowed_modes", [])
-    return mode in allowed
+    has_permission = mode in allowed
+    logger.info(f"[check_mode_permission] {chatbot_id}는 제한된 챗봇 → {mode} 권한: {has_permission} (허용: {allowed})")
+    return has_permission
 
 
 # ── 사용자 DB 스코프 ──
