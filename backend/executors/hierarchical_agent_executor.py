@@ -370,6 +370,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """단일 하위 Agent 선택 및 실행"""
+        logger.info(f"[DELEGATE DEBUG] _delegate_to_single_sub called with message: '{message[:50]}...'")
         candidates = self._select_sub_chatbot_hybrid_multi(message)
         logger.debug(f"[DELEGATE] Single-sub candidates: {len(candidates)}")
         
