@@ -686,7 +686,9 @@ class HierarchicalAgentExecutor(AgentExecutor):
             profile_parts.append(sub_def.system_prompt[:200])
 
         profile_text = ' '.join(profile_parts)
-        return self._embedding_service.cosine_similarity(message, profile_text)
+        score = self._embedding_service.cosine_similarity(message, profile_text)
+        # 안정성을 위해 반올림 (소수점 2자리)
+        return round(score, 2)
 
     # ====================================================================
     # 다중 하위 Agent 실행
