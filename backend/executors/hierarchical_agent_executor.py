@@ -347,18 +347,19 @@ class HierarchicalAgentExecutor(AgentExecutor):
             return
 
         yield f"**선택된 전문가**: {', '.join([c[0].name for c in sub_candidates])}\n\n"
-        sub_responses = self._execute_multiple_subs(sub_candidates, message, session_id, context)
+        # 위임 시 context는 비우고, 하위 Agent가 자체 DB로 검색하게 함
+        sub_responses = self._execute_multiple_subs(sub_candidates, message, session_id, "")
 
         if sub_responses:
             yield "\n---\n🔄 **응답을 종합하는 중입니다...**\n\n"
             synthesized = self._synthesize_responses(
-                parent_context=context,
+                parent_context="",  # context 비움
                 user_message=message,
                 sub_responses=sub_responses,
             )
             yield synthesized
         else:
-            yield from self._fallback_to_parent_or_self(message, session_id, context, confidence,
+            yield from self._fallback_to_parent_or_self(message, session_id, "", confidence,
                                                          reason="하위 Agent들이 응답할 수 없습니다")
 
     def _delegate_to_single_sub(
