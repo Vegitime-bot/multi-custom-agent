@@ -336,15 +336,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
         reason: str = "",
     ) -> Generator[str, None, None]:
-        """하위 위임 실패 시 부모 또는 자체 응답으로 Fallback"""
-        if self.enable_parent_delegation and self.chatbot_def.parent_id:
-            logger.info(f"[DELEGATE] Falling back to parent: {reason}")
-            yield f"\n⚠️ {reason}. 상위 Agent로 위임합니다...\n"
-            yield from self._delegate_to_parent(message, session_id, context, confidence)
-        else:
-            logger.info(f"[DELEGATE] Falling back to self: {reason}")
-            yield f"❌ {reason}.\n"
-            yield from self._execute_with_context(message, session_id, context)
+        """하위 위임 실패 시 자체 응답으로 Fallback (상위 위임 제거)"""
+        logger.info(f"[DELEGATE] Falling back to self: {reason}")
+        yield f"❌ {reason}.\n"
+        yield from self._execute_with_context(message, session_id, context)
 
     # ====================================================================
     # 상위 Agent 위임
