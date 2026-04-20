@@ -626,7 +626,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
                     filtered = scores[:1]
 
             selected = filtered[:self.max_parallel_subs]
-            logger.info(f"[DELEGATE DEBUG] selected length: {len(selected)}")
+            logger.info(f"[DELEGATE DEBUG] selected length: {len(selected)}, max_parallel_subs: {self.max_parallel_subs}")
+            logger.info(f"[DELEGATE DEBUG] filtered type: {type(filtered)}, filtered: {filtered}")
 
         return [
             (s['chatbot'], f"(kw:{s['keyword']}, emb:{s['embedding']}, hybrid:{s['hybrid']})", {
