@@ -156,7 +156,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         logger.info(f"[DELEGATION] {self.chatbot_def.name} → {delegate.target.upper()} | conf: {confidence}% | reason: {delegate.reason}")
 
         if delegate.target == 'self':
-            yield from self._respond_directly(message, session_id, combined_context, confidence)
+            yield from self._respond_directly_with_retry(message, session_id, combined_context, confidence)
         elif delegate.target == 'sub':
             yield from self._delegate(message, session_id, combined_context, confidence, delegate)
         else:
@@ -216,17 +216,75 @@ class HierarchicalAgentExecutor(AgentExecutor):
     # Phase 2a/2b: 직접 응답 / 불확실 응답
     # ====================================================================
 
-    def _respond_directly(
+    def _respond_directly_with_retry(
         self,
         message: str,
         session_id: str,
         context: str,
         confidence: float,
     ) -> Generator[str, None, None]:
-        """Confidence 충분 - 자체 답변"""
+        """Confidence 충분 - 자체 답변 (품질 검증 및 재위임 지원)"""
+        logger.info(f"[RESPOND] {self.chatbot_def.name} trying direct response (confidence: {confidence}%)")
+        
+        # 1차 시도: 자체 답변 생성
         yield f"📢 **[{self.chatbot_def.name}]** (신뢰도: {confidence}% / Level: {self.chatbot_def.level})\n"
         yield f"🧾 {self._source_note(self.chatbot_def)}\n\n"
-        yield from self._execute_with_context(message, session_id, context)
+        
+        # 답변 생성
+        answer_parts = []
+        for part in self._execute_with_context(message, session_id, context):
+            answer_parts.append(part)
+            yield part
+        
+        answer = "".join(answer_parts)
+        
+        # 품질 검증
+        quality_score = self._evaluate_answer_quality(answer, message)
+        logger.info(f"[RESPOND] {self.chatbot_def.name} quality score: {quality_score}")
+        
+        if quality_score >= 0.3:  # �질 임계값
+            logger.info(f"[RESPOND] {self.chatbot_def.name} answer quality OK")
+            return
+        
+        # ❌ 품질 낮음 → 하위로 재위임 시도
+        logger.info(f"[RESPOND] {self.chatbot_def.name} quality low, attempting re-delegation to sub")
+        yield f"\n\n⚠️ 답변 품질이 낮아 하위 Agent로 재위임합니다...\n\n"
+        
+        if self.chatbot_def.sub_chatbots:
+            yield from self._delegate_to_sub_chatbots(message, session_id, context, confidence)
+        else:
+            yield "❌ 하위 Agent가 없어 재위임할 수 없습니다.\n"
+
+    def _evaluate_answer_quality(self, answer: str, question: str) -> float:
+        """답변 품질 평가 (0.0 ~ 1.0)"""
+        if not answer or len(answer.strip()) < 10:
+            return 0.0  # 빈 답변 또는 너무 짧음
+        
+        # "모르겠다", "없다" 등의 부정 표현 체크
+        negative_patterns = [
+            r'모르겠', r'없습니다', r'없어요', r'찾을 수 없', r'정보가 없',
+            r'답변할 수 없', r'확인할 수 없', r'제공할 수 없',
+            r'해당 정보', r'관련 정보', r'문의하세요', r'문의 주세요',
+        ]
+        answer_lower = answer.lower()
+        negative_count = sum(1 for p in negative_patterns if re.search(p, answer_lower))
+        
+        if negative_count >= 2:
+            return 0.1  # 부정 표현 다수
+        if negative_count >= 1:
+            return 0.2  # 부정 표현 1개
+        
+        # 질문의 키워드가 답변에 포함되어 있는지 체크
+        question_words = set(re.findall(r'\b\w{2,}\b', question.lower()))
+        answer_words = set(re.findall(r'\b\w{2,}\b', answer_lower))
+        overlap = len(question_words & answer_words)
+        overlap_ratio = overlap / max(len(question_words), 1)
+        
+        # 기본 점수 + 키워드 오버랩
+        base_score = 0.4
+        keyword_bonus = min(overlap_ratio * 0.4, 0.4)
+        
+        return min(base_score + keyword_bonus, 1.0)
 
     def _respond_uncertain(
         self,
