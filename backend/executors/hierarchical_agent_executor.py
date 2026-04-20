@@ -112,7 +112,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
             'delegation_threshold', self.DEFAULT_DELEGATION_THRESHOLD
         )
         self.multi_sub_execution = chatbot_def.policy.get('multi_sub_execution', False)
-        self.max_parallel_subs = chatbot_def.policy.get('max_parallel_subs', 3)
+        self.max_parallel_subs = chatbot_def.policy.get('max_parallel_subs', 3) or 3  # 0이면 기본값 3 사용
         self.synthesis_mode = chatbot_def.policy.get('synthesis_mode', 'parallel')
         self.hybrid_score_threshold = chatbot_def.policy.get(
             'hybrid_score_threshold',
