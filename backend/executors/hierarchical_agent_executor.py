@@ -201,7 +201,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
     ) -> Generator[str, None, None]:
         """위임 실행 - sub 또는 fallback으로 라우팅 (상위 위임 제거)"""
         if delegate.target == 'sub':
-            yield from self._delegate_to_sub_chatbots(message, session_id, context, confidence)
+            # 위임 시 context는 비우고, 하위 Agent가 자체 DB로 검색하게 함
+            yield from self._delegate_to_sub_chatbots(message, session_id, "", confidence)
         else:
             # fallback: 하위가 없으면 현재 Agent로 답변
             yield from self._respond_uncertain(message, session_id, context, confidence)
