@@ -600,7 +600,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
         scores.sort(key=lambda x: x['hybrid'], reverse=True)
         
         # Debug: log scores
-        logger.info(f"[DELEGATE DEBUG] scores list: {scores}")
+        logger.info(f"[DELEGATE DEBUG] scores list length: {len(scores)}")
+        if scores:
+            logger.info(f"[DELEGATE DEBUG] first score: {scores[0]}")
+            logger.info(f"[DELEGATE DEBUG] first score keys: {scores[0].keys() if isinstance(scores[0], dict) else 'N/A'}")
         logger.info(f"[DELEGATE DEBUG] hybrid_threshold: {self.hybrid_score_threshold}, keyword_threshold: 0.3")
 
         # multi_sub_execution이면 전체 하위 챗봇 종합 우선
@@ -609,11 +612,13 @@ class HierarchicalAgentExecutor(AgentExecutor):
             selected = scores
         else:
             filtered = [s for s in scores if s['hybrid'] >= self.hybrid_score_threshold]
+            logger.info(f"[DELEGATE DEBUG] filtered length: {len(filtered)}, threshold: {self.hybrid_score_threshold}")
 
             # Fail-safe: if no candidates pass hybrid threshold, include best keyword match
             # if keyword_score >= 0.3 (at least 1 keyword matched)
             if not filtered:
                 keyword_matches = [s for s in scores if s['keyword'] >= 0.3]
+                logger.info(f"[DELEGATE DEBUG] keyword_matches length: {len(keyword_matches)}")
                 if keyword_matches:
                     keyword_matches.sort(key=lambda x: (x['keyword'], x['hybrid']), reverse=True)
                     filtered = keyword_matches[:1]
@@ -621,6 +626,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
                     filtered = scores[:1]
 
             selected = filtered[:self.max_parallel_subs]
+            logger.info(f"[DELEGATE DEBUG] selected length: {len(selected)}")
 
         return [
             (s['chatbot'], f"(kw:{s['keyword']}, emb:{s['embedding']}, hybrid:{s['hybrid']})", {
