@@ -491,6 +491,13 @@ class HierarchicalAgentExecutor(AgentExecutor):
             
             for sub_def in candidates:
                 try:
+                    # DEBUG: keywords 확인
+                    policy_keywords = []
+                    if getattr(sub_def, 'policy', None):
+                        policy_keywords = sub_def.policy.get('keywords', []) or []
+                    direct_keywords = getattr(sub_def, 'keywords', [])
+                    logger.info(f"[DELEGATION DEBUG] {sub_def.id} keywords: policy={policy_keywords}, direct={direct_keywords}")
+                    
                     kw_score = self._keyword_score(sub_def, message_lower)
                     emb_score = self._embedding_score(message, sub_def)
                     hybrid = self.KEYWORD_WEIGHT * kw_score + self.EMBEDDING_WEIGHT * emb_score
