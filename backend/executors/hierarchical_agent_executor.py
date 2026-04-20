@@ -806,6 +806,9 @@ class HierarchicalAgentExecutor(AgentExecutor):
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
         yield f"🧾 {self._source_note(sub_chatbot)}\n\n"
+        
+        logger.info(f"[DELEGATE] Message in _delegate_to_sub: '{message[:50]}...'")
+        
         yield from sub_executor.execute(enhanced_message, session_id)
 
     # ====================================================================
