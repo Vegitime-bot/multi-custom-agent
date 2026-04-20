@@ -718,12 +718,18 @@ class HierarchicalAgentExecutor(AgentExecutor):
         session_id: str,
         parent_context: str = "",
     ) -> str:
-        """단일 하위 Agent 실행 (전체 응답 수집)"""
-        from backend.executors import AgentExecutor
-
+        """단일 하위 Agent 실행 (전체 응답 수집) - HierarchicalAgentExecutor 사용"""
         logger.debug(f"[DELEGATE] Executing sub: {sub_chatbot.name}, DBs: {sub_chatbot.retrieval.db_ids}")
         
-        sub_executor = AgentExecutor(sub_chatbot, self.ingestion, self.memory)
+        # 하위 Executor도 HierarchicalAgentExecutor 사용 (2-tier 위임 지원)
+        sub_executor = HierarchicalAgentExecutor(
+            sub_chatbot, 
+            self.ingestion, 
+            self.memory,
+            self.chatbot_manager,
+            accumulated_context=parent_context,
+            delegation_depth=self.delegation_depth + 1
+        )
         enhanced_message = message
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
@@ -741,10 +747,16 @@ class HierarchicalAgentExecutor(AgentExecutor):
         session_id: str,
         parent_context: str = "",
     ) -> Generator[str, None, None]:
-        """하위 Agent에게 위임 실행 (스트리밍)"""
-        from backend.executors import AgentExecutor
-
-        sub_executor = AgentExecutor(sub_chatbot, self.ingestion, self.memory)
+        """하위 Agent에게 위임 실행 (스트리밍) - HierarchicalAgentExecutor 사용"""
+        # 하위 Executor도 HierarchicalAgentExecutor 사용 (2-tier 위임 지원)
+        sub_executor = HierarchicalAgentExecutor(
+            sub_chatbot,
+            self.ingestion,
+            self.memory,
+            self.chatbot_manager,
+            accumulated_context=parent_context,
+            delegation_depth=self.delegation_depth + 1
+        )
         enhanced_message = message
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
