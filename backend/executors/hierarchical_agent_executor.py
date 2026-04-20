@@ -770,6 +770,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
                 delegation_depth=self.delegation_depth + 1
             )
             enhanced_message = message
+            logger.info(f"[DELEGATE DEBUG] parent_context='{parent_context[:50]}...', message='{message[:50]}...'")
             if parent_context:
                 enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
             
