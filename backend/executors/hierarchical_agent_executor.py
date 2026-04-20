@@ -338,7 +338,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
     ) -> Generator[str, None, None]:
         """다중 하위 Agent 선택 및 실행"""
         sub_candidates = self._select_sub_chatbot_hybrid_multi(message)
-        logger.debug(f"[DELEGATE] Multi-sub candidates: {len(sub_candidates)}")
+        logger.info(f"[DELEGATE DEBUG] _delegate_to_multi_subs: candidates={len(sub_candidates)}")
         
         if not sub_candidates:
             logger.info("[DELEGATE] No multi-sub candidates found, falling back")
