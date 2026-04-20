@@ -760,12 +760,13 @@ class HierarchicalAgentExecutor(AgentExecutor):
         
         try:
             # 하위 Executor도 HierarchicalAgentExecutor 사용 (2-tier 위임 지원)
+            # accumulated_context는 비워두고, enhanced_message만으로 컨텍스트 전달
             sub_executor = HierarchicalAgentExecutor(
                 sub_chatbot, 
                 self.ingestion, 
                 self.memory,
                 self.chatbot_manager,
-                accumulated_context=parent_context,
+                accumulated_context="",  # 누적 컨텍스트 제거
                 delegation_depth=self.delegation_depth + 1
             )
             enhanced_message = message
@@ -793,12 +794,13 @@ class HierarchicalAgentExecutor(AgentExecutor):
     ) -> Generator[str, None, None]:
         """하위 Agent에게 위임 실행 (스트리밍) - HierarchicalAgentExecutor 사용"""
         # 하위 Executor도 HierarchicalAgentExecutor 사용 (2-tier 위임 지원)
+        # accumulated_context는 비워두고, enhanced_message만으로 컨텍스트 전달
         sub_executor = HierarchicalAgentExecutor(
             sub_chatbot,
             self.ingestion,
             self.memory,
             self.chatbot_manager,
-            accumulated_context=parent_context,
+            accumulated_context="",  # 누적 컨텍스트 제거
             delegation_depth=self.delegation_depth + 1
         )
         enhanced_message = message
