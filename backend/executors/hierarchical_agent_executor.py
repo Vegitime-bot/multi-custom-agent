@@ -598,6 +598,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
             })
 
         scores.sort(key=lambda x: x['hybrid'], reverse=True)
+        
+        # Debug: log scores
+        logger.info(f"[DELEGATE DEBUG] scores list: {scores}")
+        logger.info(f"[DELEGATE DEBUG] hybrid_threshold: {self.hybrid_score_threshold}, keyword_threshold: 0.3")
 
         # multi_sub_execution이면 전체 하위 챗봇 종합 우선
         # (사용자 요청: a/b/c/d 모두 조회 후 종합)
