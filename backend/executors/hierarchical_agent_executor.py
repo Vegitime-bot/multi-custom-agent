@@ -719,26 +719,31 @@ class HierarchicalAgentExecutor(AgentExecutor):
         parent_context: str = "",
     ) -> str:
         """단일 하위 Agent 실행 (전체 응답 수집) - HierarchicalAgentExecutor 사용"""
-        logger.debug(f"[DELEGATE] Executing sub: {sub_chatbot.name}, DBs: {sub_chatbot.retrieval.db_ids}")
+        logger.info(f"[DELEGATE] Executing sub: {sub_chatbot.name}(L{sub_chatbot.level}), DBs: {sub_chatbot.retrieval.db_ids}")
         
-        # 하위 Executor도 HierarchicalAgentExecutor 사용 (2-tier 위임 지원)
-        sub_executor = HierarchicalAgentExecutor(
-            sub_chatbot, 
-            self.ingestion, 
-            self.memory,
-            self.chatbot_manager,
-            accumulated_context=parent_context,
-            delegation_depth=self.delegation_depth + 1
-        )
-        enhanced_message = message
-        if parent_context:
-            enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
+        try:
+            # 하위 Executor도 HierarchicalAgentExecutor 사용 (2-tier 위임 지원)
+            sub_executor = HierarchicalAgentExecutor(
+                sub_chatbot, 
+                self.ingestion, 
+                self.memory,
+                self.chatbot_manager,
+                accumulated_context=parent_context,
+                delegation_depth=self.delegation_depth + 1
+            )
+            enhanced_message = message
+            if parent_context:
+                enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
-        sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
-        logger.debug(f"[DELEGATE] {sub_chatbot.name} answer length: {len(sub_answer)}")
-        
-        source_header = f"🧾 {self._source_note(sub_chatbot)}\n\n"
-        return source_header + sub_answer
+            logger.info(f"[DELEGATE] Starting sub-executor for {sub_chatbot.name} with depth={self.delegation_depth + 1}")
+            sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
+            logger.info(f"[DELEGATE] {sub_chatbot.name} completed, answer length: {len(sub_answer)}")
+            
+            source_header = f"🧾 {self._source_note(sub_chatbot)}\n\n"
+            return source_header + sub_answer
+        except Exception as e:
+            logger.error(f"[DELEGATE] Error executing sub {sub_chatbot.name}: {e}", exc_info=True)
+            return f"❌ 하위 Agent '{sub_chatbot.name}' 실행 중 오류 발생: {str(e)}"
 
     def _delegate_to_sub(
         self,
