@@ -771,6 +771,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
             enhanced_message = message
             if parent_context:
                 enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
+            
+            logger.info(f"[DELEGATE] Enhanced message for {sub_chatbot.name}: {enhanced_message[:100]}...")
 
             logger.info(f"[DELEGATE] Starting sub-executor for {sub_chatbot.name} with depth={self.delegation_depth + 1}")
             sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
