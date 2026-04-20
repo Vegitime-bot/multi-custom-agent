@@ -157,7 +157,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         if delegate.target == 'self':
             yield from self._respond_directly(message, session_id, combined_context, confidence)
-        elif delegate.target in ('sub', 'parent'):
+        elif delegate.target == 'sub':
             yield from self._delegate(message, session_id, combined_context, confidence, delegate)
         else:
             # Phase 3: Fallback
@@ -169,48 +169,26 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
     def _select_delegate_target(self, confidence: float, message: str) -> DelegateResult:
         """
-        개선된 위임 대상 결정
-
-        위임 방향:
-        - Confidence >= threshold: 자체 답변
-        - Confidence < threshold:
-          - 하위 Agent 중 적합한 후보 있으면 하위로 위임
-          - 적합한 후보 없으면 상위로 위임 또는 fallback
-
-        Returns:
-            DelegateResult(target='self'|'sub'|'parent'|'fallback')
+        하향 위임만 지원하는 단순화된 버전
         """
-        # 충분한 Confidence면 자체 답변
         if confidence >= self.delegation_threshold:
+            # Confidence 충분하면 자체 답변
             return DelegateResult(
                 target='self',
                 reason=f"confidence {confidence}% >= threshold {self.delegation_threshold}%",
             )
-
-        # Confidence 낮음 - 위임 대상 탐색
-        current_level = self.chatbot_def.level
-
-        # 1순위: 하위 Agent 중 적합한 후보 선택 (hybrid_score_threshold 적용)
+        
+        # Confidence 부족하면 하위로 위임 시도
         if self.chatbot_def.sub_chatbots:
-            # 실제로 적합한 하위가 있는지 미리 확인
-            sub_candidates = self._select_sub_chatbot_hybrid_multi_for_delegation(message)
-            if sub_candidates:
-                return DelegateResult(
-                    target='sub',
-                    reason=f"level={current_level}, confidence {confidence}% < threshold, has qualified sub_chatbots",
-                )
-
-        # 2순위: 상위 Agent로 위임
-        if self.enable_parent_delegation and self.chatbot_def.parent_id:
             return DelegateResult(
-                target='parent',
-                reason=f"level={current_level}, confidence {confidence}% < threshold, no qualified sub, delegate UP",
+                target='sub',
+                reason=f"confidence {confidence}% < threshold, has sub_chatbots",
             )
-
-        # 3순위: Fallback (최선의 답변 시도)
+        
+        # Leaf 노드면 fallback
         return DelegateResult(
             target='fallback',
-            reason=f"level={current_level}, confidence {confidence}% < threshold, no qualified delegation target",
+            reason=f"confidence {confidence}% < threshold, no sub_chatbots",
         )
 
     def _delegate(
@@ -221,11 +199,12 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
         delegate: DelegateResult,
     ) -> Generator[str, None, None]:
-        """위임 실행 - sub 또는 parent로 라우팅"""
+        """위임 실행 - sub 또는 fallback으로 라우팅 (상위 위임 제거)"""
         if delegate.target == 'sub':
             yield from self._delegate_to_sub_chatbots(message, session_id, context, confidence)
         else:
-            yield from self._delegate_to_parent(message, session_id, context, confidence)
+            # fallback: 하위가 없으면 현재 Agent로 답변
+            yield from self._respond_uncertain(message, session_id, context, confidence)
 
     def _source_note(self, chatbot: ChatbotDef) -> str:
         """응답 출처 표기 문자열 생성"""
