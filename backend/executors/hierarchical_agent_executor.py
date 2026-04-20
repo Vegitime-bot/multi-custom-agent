@@ -136,45 +136,24 @@ class HierarchicalAgentExecutor(AgentExecutor):
         Phase 2: 위임 결정 및 실행 (_select_delegate_target → _delegate or _respond_directly)
         Phase 3: Fallback 처리 (_respond_uncertain)
         """
-        # 강제 stdout 출력 (로깅 설정 무관)
-        print(f"[EXECUTE] Chatbot: {self.chatbot_def.name} (ID: {self.chatbot_def.id})", flush=True)
-        print(f"[EXECUTE] Message: {message[:50]}...", flush=True)
-        print(f"[EXECUTE] Session: {session_id}", flush=True)
-        print(f"[EXECUTE] Delegation depth: {self.delegation_depth}", flush=True)
-        print(f"[EXECUTE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}", flush=True)
-        print(f"[EXECUTE] Parent ID: {self.chatbot_def.parent_id}", flush=True)
-        
-        logger.info(f"[EXECUTE] Chatbot: {self.chatbot_def.name} (ID: {self.chatbot_def.id})")
-        logger.info(f"[EXECUTE] Message: {message[:50]}...")
-        logger.info(f"[EXECUTE] Session: {session_id}")
-        logger.info(f"[EXECUTE] Delegation depth: {self.delegation_depth}")
-        logger.info(f"[EXECUTE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}")
-        logger.info(f"[EXECUTE] Parent ID: {self.chatbot_def.parent_id}")
+        # 위임 관련 핵심 로그만 남김
+        logger.info(f"[EXECUTE] {self.chatbot_def.name}(L{self.chatbot_def.level}) | msg: {message[:50]}... | depth: {self.delegation_depth}")
 
         # 위임 깊이 초과 체크
         if self.delegation_depth >= self.MAX_DELEGATION_DEPTH:
             logger.warning(f"[EXECUTE] Max delegation depth exceeded: {self.delegation_depth}")
-            yield f"⚠️ 최대 위임 깊이({self.MAX_DELEGATION_DEPTH})를 초과했습니다. "
-            yield f"현재 Agent [{self.chatbot_def.name}]가 최선의 답변을 제공합니다.\n\n"
+            yield f"⚠️ 최대 위임 깊이({self.MAX_DELEGATION_DEPTH})를 초과했습니다.\n\n"
             yield from self._execute_with_context(message, session_id, "")
             return
 
         # Phase 1: RAG 검색 및 Confidence 계산
         context = self._retrieve(message, self.chatbot_def.retrieval.db_ids)
-        logger.info(f"[EXECUTE] Retrieved context length: {len(context)} chars")
-        logger.info(f"[EXECUTE] DB IDs: {self.chatbot_def.retrieval.db_ids}")
-
         combined_context = self._combine_contexts(self.accumulated_context, context)
         confidence = self._calculate_confidence(combined_context, message)
-        logger.info(f"[EXECUTE] Confidence: {confidence}% (threshold: {self.delegation_threshold}%)")
 
         # Phase 2: 위임 결정 및 실행
         delegate = self._select_delegate_target(confidence, message)
-        # DEBUG: print로 강제 출력
-        print(f"[DELEGATION PATH] {self.chatbot_def.name} → {delegate.target.upper()} | {delegate.reason}", flush=True)
-        logger.info(
-            f"[DELEGATION PATH] {self.chatbot_def.name} → {delegate.target.upper()} | {delegate.reason}"
-        )
+        logger.info(f"[DELEGATION] {self.chatbot_def.name} → {delegate.target.upper()} | conf: {confidence}% | reason: {delegate.reason}")
 
         if delegate.target == 'self':
             yield from self._respond_directly(message, session_id, combined_context, confidence)
@@ -296,11 +275,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """하위 챗봇으로 위임"""
-        print(f"[DELEGATE] Starting sub delegation from {self.chatbot_def.name}", flush=True)
-        print(f"[DELEGATE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}", flush=True)
-        print(f"[DELEGATE] multi_sub_execution: {self.multi_sub_execution}", flush=True)
-        logger.info(f"[DELEGATE] Starting sub delegation from {self.chatbot_def.name}")
-        logger.info(f"[DELEGATE] Sub chatbots: {[s.id for s in self.chatbot_def.sub_chatbots]}")
+        logger.info(f"[DELEGATE] {self.chatbot_def.name} -> sub | confidence: {confidence}% | subs: {[s.id for s in self.chatbot_def.sub_chatbots]}")
 
         yield f"📋 이 질문은 전문가 상담이 필요합니다.\n\n"
         yield f"({self.chatbot_def.name} 신뢰도: {confidence}% → 하위 Agent 위임)\n\n"
@@ -319,19 +294,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """다중 하위 Agent 선택 및 실행"""
-        print("[DELEGATE] _delegate_to_multi_subs called", flush=True)
-        logger.info("[DELEGATE] Multi-sub execution enabled")
-        
         sub_candidates = self._select_sub_chatbot_hybrid_multi(message)
-        print(f"[DELEGATE] candidates: {len(sub_candidates)}", flush=True)
-        
-        for candidate in sub_candidates:
-            print(f"[DELEGATE]   - {candidate}", flush=True)
-        
-        logger.info(f"[DELEGATE] Selected {len(sub_candidates)} candidates")
+        logger.debug(f"[DELEGATE] Multi-sub candidates: {len(sub_candidates)}")
         
         if not sub_candidates:
-            print("[DELEGATE] No candidates, falling back", flush=True)
             logger.info("[DELEGATE] No multi-sub candidates found, falling back")
             yield from self._fallback_to_parent_or_self(message, session_id, context, confidence,
                                                          reason="적합한 하위 Agent를 찾을 수 없습니다")
@@ -360,14 +326,12 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """단일 하위 Agent 선택 및 실행"""
-        print(f"[DELEGATE] _delegate_to_single_sub called", flush=True)
         candidates = self._select_sub_chatbot_hybrid_multi(message)
-        print(f"[DELEGATE] candidates found: {len(candidates)}", flush=True)
+        logger.debug(f"[DELEGATE] Single-sub candidates: {len(candidates)}")
         
         if candidates:
             sub_chatbot, selection_info, scores = candidates[0]
-            print(f"[DELEGATE] Selected sub: {sub_chatbot.name} ({sub_chatbot.id})", flush=True)
-            print(f"[DELEGATE] Scores: kw={scores['keyword']}, emb={scores['embedding']}, hybrid={scores['hybrid']}", flush=True)
+            logger.info(f"[DELEGATE] Selected sub: {sub_chatbot.name} (kw:{scores['keyword']:.3f}, emb:{scores['embedding']:.3f}, hybrid:{scores['hybrid']:.3f})")
             # 선택 근거 가시화 (디버깅/운영 확인용)
             yield "📊 **하위 후보 점수(상위 3)**\n"
             for i, (cb, _, sc) in enumerate(candidates[:3], 1):
@@ -621,18 +585,33 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         우선순위:
         1) chatbot JSON policy.keywords
-        2) 코드 내 KEYWORDS_MAP
+        2) chatbot.keywords 속성 (하위 호환)
+        3) 코드 내 KEYWORDS_MAP (레거시 하위 호환)
         """
-        policy_keywords = []
-        if getattr(sub_def, 'policy', None):
-            policy_keywords = sub_def.policy.get('keywords', []) or []
+        keywords = []
 
-        keywords = policy_keywords if policy_keywords else self.KEYWORDS_MAP.get(sub_def.id, [])
+        # 1) policy.keywords 확인
+        if getattr(sub_def, 'policy', None):
+            keywords = sub_def.policy.get('keywords', []) or []
+
+        # 2) policy에 없으면 chatbot.keywords 속성 확인
+        if not keywords and getattr(sub_def, 'keywords', None):
+            keywords = sub_def.keywords
+
+        # 3) 둘 다 없으면 KEYWORDS_MAP 확인 (레거시)
+        if not keywords:
+            keywords = self.KEYWORDS_MAP.get(sub_def.id, [])
+
         if not keywords:
             return 0.0
 
         matched = sum(1 for kw in keywords if kw.lower() in message_lower)
-        return min(matched / max(len(keywords) * 0.3, 1), 1.0)
+        score = min(matched / max(len(keywords) * 0.3, 1), 1.0)
+
+        # DEBUG: 위임 결정 관련 로그만 남김
+        logger.debug(f"[_keyword_score] {sub_def.id}: matched={matched}/{len(keywords)}, score={score:.3f}")
+
+        return score
 
     def _embedding_score(self, message: str, sub_def: ChatbotDef) -> float:
         """임베딩 코사인 유사도 점수 (0~1)"""
@@ -679,17 +658,15 @@ class HierarchicalAgentExecutor(AgentExecutor):
         parent_context: str = "",
     ) -> List[Tuple[str, str, str]]:
         """순차적으로 다중 하위 Agent 실행"""
-        print(f"[EXECUTE MULTI] Sequential execution for {len(sub_candidates)} candidates", flush=True)
+        logger.debug(f"[DELEGATE] Sequential execution for {len(sub_candidates)} candidates")
         results = []
         for sub_chatbot, selection_info, scores in sub_candidates:
-            print(f"[EXECUTE MULTI] Executing: {sub_chatbot.name}", flush=True)
             try:
                 response = self._execute_single_sub(sub_chatbot, message, session_id, parent_context)
-                print(f"[EXECUTE MULTI] {sub_chatbot.name} response length: {len(response)}", flush=True)
                 if response:
                     results.append((sub_chatbot.id, sub_chatbot.name, response))
             except Exception as e:
-                print(f"[EXECUTE MULTI] {sub_chatbot.name} error: {e}", flush=True)
+                logger.warning(f"[DELEGATE] {sub_chatbot.name} error: {e}")
                 results.append((sub_chatbot.id, sub_chatbot.name, f"[오류: 응답 생성 실패 - {str(e)}]"))
         return results
 
@@ -701,18 +678,16 @@ class HierarchicalAgentExecutor(AgentExecutor):
         parent_context: str = "",
     ) -> List[Tuple[str, str, str]]:
         """병렬로 다중 하위 Agent 실행"""
-        print(f"[EXECUTE MULTI] Parallel execution for {len(sub_candidates)} candidates", flush=True)
+        logger.debug(f"[DELEGATE] Parallel execution for {len(sub_candidates)} candidates")
         results = []
         errors = []
 
         def execute_single(sub_chatbot: ChatbotDef) -> Tuple[str, str, Optional[str]]:
-            print(f"[EXECUTE MULTI] Parallel executing: {sub_chatbot.name}", flush=True)
             try:
                 response = self._execute_single_sub(sub_chatbot, message, session_id, parent_context)
-                print(f"[EXECUTE MULTI] {sub_chatbot.name} got response", flush=True)
                 return (sub_chatbot.id, sub_chatbot.name, response)
             except Exception as e:
-                print(f"[EXECUTE MULTI] {sub_chatbot.name} error: {e}", flush=True)
+                logger.warning(f"[DELEGATE] {sub_chatbot.name} error: {e}")
                 return (sub_chatbot.id, sub_chatbot.name, None)
 
         with ThreadPoolExecutor(max_workers=min(len(sub_candidates), 5)) as executor:
@@ -739,16 +714,15 @@ class HierarchicalAgentExecutor(AgentExecutor):
         """단일 하위 Agent 실행 (전체 응답 수집)"""
         from backend.executors import AgentExecutor
 
-        print(f"[EXECUTE SINGLE] Sub: {sub_chatbot.name}, DBs: {sub_chatbot.retrieval.db_ids}", flush=True)
+        logger.debug(f"[DELEGATE] Executing sub: {sub_chatbot.name}, DBs: {sub_chatbot.retrieval.db_ids}")
         
         sub_executor = AgentExecutor(sub_chatbot, self.ingestion, self.memory)
         enhanced_message = message
         if parent_context:
             enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
 
-        print(f"[EXECUTE SINGLE] Calling execute for {sub_chatbot.name}...", flush=True)
         sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
-        print(f"[EXECUTE SINGLE] {sub_chatbot.name} answer length: {len(sub_answer)}", flush=True)
+        logger.debug(f"[DELEGATE] {sub_chatbot.name} answer length: {len(sub_answer)}")
         
         source_header = f"🧾 {self._source_note(sub_chatbot)}\n\n"
         return source_header + sub_answer
@@ -782,25 +756,22 @@ class HierarchicalAgentExecutor(AgentExecutor):
         sub_responses: List[Tuple[str, str, str]],
     ) -> str:
         """다중 하위 Agent 응답을 종합하여 하나의 응답 생성"""
-        print(f"[SYNTHESIZE] Starting with {len(sub_responses)} responses", flush=True)
+        logger.debug(f"[SYNTHESIZE] Starting with {len(sub_responses)} responses")
         
         if not sub_responses:
-            print("[SYNTHESIZE] No responses, returning error", flush=True)
+            logger.warning("[SYNTHESIZE] No responses from sub-agents")
             return "❌ 하위 Agent로부터 응답을 받지 못했습니다."
-
-        print(f"[SYNTHESIZE] Response sources: {[name for _, name, _ in sub_responses]}", flush=True)
-        print(f"[SYNTHESIZE] First response length: {len(sub_responses[0][2]) if sub_responses else 0}", flush=True)
 
         if len(sub_responses) == 1:
             _, name, response = sub_responses[0]
-            print(f"[SYNTHESIZE] Single response from {name}, returning directly", flush=True)
+            logger.debug(f"[SYNTHESIZE] Single response from {name}, returning directly")
             return f"**[{name}]**\n\n{response}"
 
-        print("[SYNTHESIZE] Building synthesis prompt...", flush=True)
+        logger.debug(f"[SYNTHESIZE] Building synthesis prompt for {len(sub_responses)} responses")
         synthesis_prompt = self._build_synthesis_prompt(parent_context, user_message, sub_responses)
 
         try:
-            print("[SYNTHESIZE] Calling LLM...", flush=True)
+            logger.debug("[SYNTHESIZE] Calling LLM for synthesis")
             client = get_llm_client()
             messages = [
                 {"role": "system", "content": synthesis_prompt["system"]},
@@ -817,10 +788,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
             synthesized += "\n\n---\n**참고 전문가:** " + ", ".join(
                 [f"[{name}]" for _, name, _ in sub_responses]
             )
-            print(f"[SYNTHESIZE] LLM response length: {len(synthesized)}", flush=True)
+            logger.debug(f"[SYNTHESIZE] LLM response length: {len(synthesized)}")
             return synthesized
         except Exception as e:
-            print(f"[SYNTHESIZE] LLM error: {e}, using fallback", flush=True)
+            logger.warning(f"[SYNTHESIZE] LLM error: {e}, using fallback")
             return self._fallback_synthesis(sub_responses)
 
     def _build_synthesis_prompt(
