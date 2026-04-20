@@ -238,9 +238,14 @@ class HierarchicalAgentExecutor(AgentExecutor):
         
         answer = "".join(answer_parts)
         
-        # 품질 검증
-        quality_score = self._evaluate_answer_quality(answer, message)
-        logger.info(f"[RESPOND] {self.chatbot_def.name} quality score: {quality_score}")
+        # 원래 질문 추출 (컨텍스트 제거)
+        original_question = message
+        if "[질문]" in message:
+            original_question = message.split("[질문]")[-1].strip()
+        
+        # 품질 검증 (원래 질문 기준)
+        quality_score = self._evaluate_answer_quality(answer, original_question)
+        logger.info(f"[RESPOND] {self.chatbot_def.name} quality score: {quality_score} (question: {original_question[:30]}...)")
         
         if quality_score >= 0.3:  # �질 임계값
             logger.info(f"[RESPOND] {self.chatbot_def.name} answer quality OK")
