@@ -148,10 +148,13 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         # Phase 0: 히스토리 압축 (검색 쿼리 확장 대신 컨텍스트에 prepend)
         history_context = ""
+        logger.info(f"[EXECUTE] Checking history: session_id={session_id is not None}, memory={self.memory is not None}")
         if session_id and self.memory:
             history = self.memory.get_history(self.chatbot_def.id, session_id)
+            logger.info(f"[EXECUTE] History retrieved: {len(history)} messages")
             if history:
                 history_context = self._compact_history(history)
+                logger.info(f"[EXECUTE] History compacted: '{history_context[:100]}...' ({len(history_context)} chars)")
                 if history_context:
                     logger.info(f"[EXECUTE] History compacted: {len(history_context)} chars")
 
