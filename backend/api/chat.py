@@ -460,6 +460,9 @@ async def chat(
 
     # 6. SSE 스트리밍
     async def event_generator() -> AsyncGenerator[str, None]:
+        # 먼저 session_id 전송 (클라이언트 저장용)
+        yield sse_event(json.dumps({"session_id": session.session_id}), event="session")
+        
         full_response = []
         chunk_count = 0
         llm_start_time = time.time()
@@ -731,6 +734,9 @@ async def chat_agent(
 
     # 4. SSE 스트리밍
     async def event_generator() -> AsyncGenerator[str, None]:
+        # 먼저 session_id 전송 (클라이언트 저장용)
+        yield sse_event(json.dumps({"session_id": session.session_id}), event="session")
+        
         full_response = []
         chunk_count = 0
         
