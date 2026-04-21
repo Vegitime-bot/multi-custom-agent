@@ -54,10 +54,19 @@ class AgentExecutor(BaseExecutor):
         history = self.memory.get_history(self.chatbot_def.id, session_id)
         print(f"[DEBUG AgentExecutor] history loaded: {len(history)} messages")
 
-        # 2. RAG 검색 (DB 스코프 적용)
-        print(f"[DEBUG AgentExecutor] calling _retrieve with query: {message[:50]}...")
+        # 2. 히스토리 압축 및 검색 쿼리 확장
+        compacted = self._compact_history(history)
+        if compacted:
+            print(f"[DEBUG AgentExecutor] compacted history:\n{compacted[:200]}...")
+        
+        enhanced_query = self._build_contextual_query(compacted, message)
+        if enhanced_query != message:
+            print(f"[DEBUG AgentExecutor] query enhanced: '{message[:50]}...' -> '{enhanced_query[:100]}...'")
+
+        # 3. RAG 검색 (확장된 쿼리 사용)
+        print(f"[DEBUG AgentExecutor] calling _retrieve with query: {enhanced_query[:50]}...")
         context = self._retrieve(
-            query=message,
+            query=enhanced_query,
             db_ids=self.chatbot_def.retrieval.db_ids,
         )
         print(f"[DEBUG AgentExecutor] _retrieve returned context length: {len(context)}")

@@ -101,6 +101,90 @@ class BaseExecutor(ABC):
             context=context,
         )
 
+    def _compact_history(self, history: list, max_turns: int = 3) -> str:
+        """
+        대화 히스토리를 압축하여 검색 컨텍스트 생성
+        
+        Args:
+            history: 메시지 리스트 (user/assistant pairs)
+            max_turns: 압축할 최근 턴 수
+            
+        Returns:
+            압축된 히스토리 컨텍스트 문자열
+        """
+        if not history or len(history) < 2:
+            return ""
+        
+        # 최근 N개 턴 (user + assistant = 2개씩) 추출
+        recent = history[-(max_turns * 2):]
+        
+        # 간단한 키워드 기반 압축 (향후 LLM 기반으로 개선 가능)
+        compact_parts = []
+        for msg in recent:
+            if msg.role == "user":
+                # 사용자 질문에서 핵심 키워드 추출
+                content = msg.content.strip()
+                if content:
+                    compact_parts.append(f"Q: {content[:100]}")
+            elif msg.role == "assistant":
+                # 답변에서 핵심 내용 추출 (앞부분만)
+                content = msg.content.strip()
+                if content:
+                    # 주요 키워드 포함한 첫 문장 추출
+                    first_sentence = content.split('.')[0] if '.' in content else content[:100]
+                    compact_parts.append(f"A: {first_sentence[:150]}")
+        
+        return "\n".join(compact_parts)
+
+    def _build_contextual_query(
+        self,
+        compacted_history: str,
+        message: str,
+    ) -> str:
+        """
+        압축된 히스토리와 현재 질문을 결합한 검색 쿼리 생성
+        
+        Examples:
+            - "A회의록 검색해줘" + "이 리스크 헤지 설명해" 
+              → "A회의록 리스크 헤지 설명해"
+        """
+        if not compacted_history:
+            return message
+        
+        # 히스토리에서 주요 키워드/주제 추출
+        history_keywords = self._extract_keywords(compacted_history)
+        
+        # 현재 질문이 모호한 대명사/지시어로 시작하는지 확인
+        vague_starts = ['이 ', '이것', '이거', '그 ', '그것', '그거', '저 ', '저것', '이번', '위의', '앞서', '지금']
+        is_vague = any(message.startswith(v) for v in vague_starts)
+        
+        if is_vague and history_keywords:
+            # 대명사를 히스토리 키워드로 치환
+            # 예: "이 리스크 헤지" → "A회의록 리스크 헤지"
+            return f"{history_keywords} {message}"
+        
+        return message
+    
+    def _extract_keywords(self, text: str) -> str:
+        """텍스트에서 핵심 키워드 추출 (회의록명, 프로젝트명 등)"""
+        # 회의록/문서 관련 패턴
+        import re
+        
+        # 회의록/보고서 패턴
+        doc_patterns = [
+            r'([A-Z가-힣]+\d*\s*(?:회의록|보고서|주간보고|주보|회의|문서))',
+            r'([A-Z가-힣]+\d*\s*(?:minutes|report|meeting|doc))',
+        ]
+        
+        keywords = []
+        for pattern in doc_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            keywords.extend(matches)
+        
+        # 중복 제거 및 결합
+        unique_keywords = list(dict.fromkeys(keywords))
+        return " ".join(unique_keywords[:3])  # 최대 3개 키워드
+
     def _build_messages_with_history(
         self,
         system_prompt: str,

@@ -146,22 +146,35 @@ class HierarchicalAgentExecutor(AgentExecutor):
             yield from self._execute_with_context(message, session_id, "")
             return
 
-        # Phase 1: RAG 검색 및 Confidence 계산
-        context = self._retrieve(message, self.chatbot_def.retrieval.db_ids)
+        # Phase 0: 히스토리 압축 및 검색 쿼리 확장 (세션 기반)
+        compacted = ""
+        enhanced_message = message
+        if session_id and self.memory:
+            history = self.memory.get_history(self.chatbot_def.id, session_id)
+            if history:
+                compacted = self._compact_history(history)
+                if compacted:
+                    logger.debug(f"[EXECUTE] compacted history: {compacted[:100]}...")
+                enhanced_message = self._build_contextual_query(compacted, message)
+                if enhanced_message != message:
+                    logger.info(f"[EXECUTE] query enhanced: '{message[:30]}...' -> '{enhanced_message[:50]}...'")
+
+        # Phase 1: RAG 검색 및 Confidence 계산 (확장된 쿼리 사용)
+        context = self._retrieve(enhanced_message, self.chatbot_def.retrieval.db_ids)
         combined_context = self._combine_contexts(self.accumulated_context, context)
-        confidence = self._calculate_confidence(combined_context, message)
+        confidence = self._calculate_confidence(combined_context, enhanced_message)
 
         # Phase 2: 위임 결정 및 실행
-        delegate = self._select_delegate_target(confidence, message)
+        delegate = self._select_delegate_target(confidence, enhanced_message)
         logger.info(f"[DELEGATION] {self.chatbot_def.name} → {delegate.target.upper()} | conf: {confidence}% | reason: {delegate.reason}")
 
         if delegate.target == 'self':
-            yield from self._respond_directly_with_retry(message, session_id, combined_context, confidence)
+            yield from self._respond_directly_with_retry(enhanced_message, session_id, combined_context, confidence)
         elif delegate.target == 'sub':
-            yield from self._delegate(message, session_id, combined_context, confidence, delegate)
+            yield from self._delegate(enhanced_message, session_id, combined_context, confidence, delegate)
         else:
             # Phase 3: Fallback
-            yield from self._respond_uncertain(message, session_id, combined_context, confidence)
+            yield from self._respond_uncertain(enhanced_message, session_id, combined_context, confidence)
 
     # ====================================================================
     # Phase 2: 위임 결정
