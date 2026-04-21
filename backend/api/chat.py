@@ -26,7 +26,7 @@ from backend.permissions.repository import (
     get_permission_repository,
 )
 from backend.debug_logger import logger
-from backend.executors import ToolExecutor, AgentExecutor, ParentAgentExecutor
+from backend.executors import ToolExecutor, AgentExecutor, HierarchicalAgentExecutor
 from backend.managers.chatbot_manager import ChatbotManager
 from backend.managers.memory_manager import MemoryManager
 from backend.managers.session_manager import SessionManager
@@ -294,21 +294,20 @@ def create_executor(
 ):
     """모드에 맞는 Executor 생성
     
-    상위 챗봇(sub_chatbots 있음)은 ParentAgentExecutor 사용
+    하위 챗봘이 있거나 상위 위임이 필요한 경우 HierarchicalAgentExecutor 사용
     """
     if mode == ExecutionRole.TOOL:
         return ToolExecutor(chatbot_def, ingestion_client)
     
-    # Agent 모드: 하위 챗봇이 있으면 ParentAgentExecutor 사용
-    if chatbot_def.sub_chatbots:
-        return ParentAgentExecutor(
-            chatbot_def, 
-            ingestion_client, 
-            memory_manager,
-            chatbot_manager
-        )
-    else:
-        return AgentExecutor(chatbot_def, ingestion_client, memory_manager)
+    # Agent 모드: 계층적 위임 지원을 위해 HierarchicalAgentExecutor 사용
+    return HierarchicalAgentExecutor(
+        chatbot_def=chatbot_def,
+        ingestion_client=ingestion_client,
+        memory_manager=memory_manager,
+        chatbot_manager=chatbot_manager,
+        accumulated_context="",
+        delegation_depth=0,
+    )
 
 
 # ── 챗봇 목록 ─────────────────────────────────────────────────────
