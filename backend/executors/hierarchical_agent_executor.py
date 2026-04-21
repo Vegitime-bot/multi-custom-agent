@@ -27,7 +27,7 @@ from backend.llm.client import get_llm_client
 
 # 로거 설정
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 def get_hybrid_score_threshold() -> float:

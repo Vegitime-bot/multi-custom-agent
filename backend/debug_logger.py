@@ -20,7 +20,7 @@ def setup_logging():
     
     # 로거 생성
     logger = logging.getLogger("multi_agent")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     
     # 이미 핸들러가 있으면 추가하지 않음
     if logger.handlers:
@@ -28,7 +28,7 @@ def setup_logging():
     
     # 콘솔 핸들러
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO)
     
     # 포맷
     formatter = logging.Formatter(
