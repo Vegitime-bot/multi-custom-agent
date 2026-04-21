@@ -5,7 +5,10 @@ managers/session_manager.py - 세션 관리
 현재 인메모리 구현 (향후 Redis/DB로 교체 가능).
 """
 import uuid
+import logging
 from backend.core.models import ChatSession, ExecutionRole
+
+logger = logging.getLogger(__name__)
 
 
 class SessionManager:
@@ -45,13 +48,42 @@ class SessionManager:
         user_knox_id: str,
         session_id: str | None = None,
     ) -> ChatSession:
+        """세션 조회 또는 생성. session_id가 없으면 최근 세션 자동 연결."""
+        # 1. 명시적 session_id로 조회
         if session_id and session_id in self._sessions:
+            logger.info(f"[SessionManager] Found existing session: {session_id}")
             return self._sessions[session_id]
-        return self.create_session(
+        
+        # 2. 동일 user + chatbot의 최근 세션 찾기
+        recent_session = self._find_recent_session(user_knox_id, chatbot_id)
+        if recent_session:
+            logger.info(f"[SessionManager] Reusing recent session: {recent_session.session_id} for {user_knox_id}/{chatbot_id}")
+            return recent_session
+        
+        # 3. 새 세션 생성
+        new_session = self.create_session(
             chatbot_id=chatbot_id,
             user_knox_id=user_knox_id,
             session_id=session_id,
         )
+        logger.info(f"[SessionManager] Created new session: {new_session.session_id}")
+        return new_session
+    
+    def _find_recent_session(
+        self,
+        user_knox_id: str,
+        chatbot_id: str,
+    ) -> ChatSession | None:
+        """동일 user + chatbot의 가장 최근 세션 찾기"""
+        matching = [
+            s for s in self._sessions.values()
+            if s.user_knox_id == user_knox_id and s.chatbot_id == chatbot_id
+        ]
+        if matching:
+            # 생성 시간 기준으로 정렬 (session_id가 uuid이므로 대략적인 시간순)
+            # 더 정확하려면 ChatSession에 created_at 필드 필요
+            return matching[-1]  # 가장 마지막에 추가된 세션
+        return None
 
     def close_session(self, session_id: str) -> bool:
         if session_id in self._sessions:
