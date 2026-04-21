@@ -153,8 +153,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
             history = self.memory.get_history(self.chatbot_def.id, session_id)
             if history:
                 compacted = self._compact_history(history)
-                if compacted:
-                    logger.debug(f"[EXECUTE] compacted history: {compacted[:100]}...")
+                # DEBUG: logger.debug(f"[EXECUTE] compacted history: {compacted[:100]}...")
                 enhanced_message = self._build_contextual_query(compacted, message)
                 if enhanced_message != message:
                     logger.info(f"[EXECUTE] query enhanced: '{message[:30]}...' -> '{enhanced_message[:50]}...'")
@@ -259,10 +258,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
         
         # 품질 검증 (원래 질문 기준)
         quality_score = self._evaluate_answer_quality(answer, original_question)
-        logger.info(f"[RESPOND] {self.chatbot_def.name} quality score: {quality_score} (question: {original_question[:30]}...)")
+        # DEBUG: logger.info(f"[RESPOND] {self.chatbot_def.name} quality score: {quality_score} (question: {original_question[:30]}...)")
         
-        if quality_score >= 0.3:  # �질 임계값
-            logger.info(f"[RESPOND] {self.chatbot_def.name} answer quality OK")
+        if quality_score >= 0.3:  # 품질 임계값
+            # DEBUG: logger.info(f"[RESPOND] {self.chatbot_def.name} answer quality OK")
             return
         
         # ❌ 품질 낮음 → 하위로 재위임 시도
@@ -351,10 +350,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
     ) -> Generator[str, None, None]:
         """다중 하위 Agent 선택 및 실행"""
         sub_candidates = self._select_sub_chatbot_hybrid_multi(message)
-        logger.info(f"[DELEGATE DEBUG] _delegate_to_multi_subs: candidates={len(sub_candidates)}")
+        # DEBUG: logger.info(f"[DELEGATE DEBUG] _delegate_to_multi_subs: candidates={len(sub_candidates)}")
         
         if not sub_candidates:
-            logger.info("[DELEGATE] No multi-sub candidates found, falling back")
+            # DEBUG: logger.info("[DELEGATE] No multi-sub candidates found, falling back")
             yield from self._fallback_to_parent_or_self(message, session_id, context, confidence,
                                                          reason="적합한 하위 Agent를 찾을 수 없습니다")
             return
@@ -383,9 +382,9 @@ class HierarchicalAgentExecutor(AgentExecutor):
         confidence: float,
     ) -> Generator[str, None, None]:
         """단일 하위 Agent 선택 및 실행"""
-        logger.info(f"[DELEGATE DEBUG] _delegate_to_single_sub called with message: '{message[:50]}...'")
+        # DEBUG: logger.info(f"[DELEGATE DEBUG] _delegate_to_single_sub called with message: '{message[:50]}...'")
         candidates = self._select_sub_chatbot_hybrid_multi(message)
-        logger.debug(f"[DELEGATE] Single-sub candidates: {len(candidates)}")
+        # DEBUG: logger.debug(f"[DELEGATE] Single-sub candidates: {len(candidates)}")
         
         if candidates:
             sub_chatbot, selection_info, scores = candidates[0]
@@ -397,10 +396,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
             yield "\n"
 
             sub_chatbot, selection_info, scores = candidates[0]
-            logger.info(
-                f"[DELEGATE] Single sub selected: {sub_chatbot.name} "
-                f"(kw:{scores['keyword']}, emb:{scores['embedding']}, hybrid:{scores['hybrid']})"
-            )
+            # DEBUG: logger.info(
+            #     f"[DELEGATE] Single sub selected: {sub_chatbot.name} "
+            #     f"(kw:{scores['keyword']}, emb:{scores['embedding']}, hybrid:{scores['hybrid']})"
+            # )
             yield f"✅ **선택된 하위 챗봇: [{sub_chatbot.name}]** {selection_info}\n\n"
             yield from self._delegate_to_sub(sub_chatbot, message, session_id, context)
         else:
@@ -545,17 +544,17 @@ class HierarchicalAgentExecutor(AgentExecutor):
             for sub_def in candidates:
                 try:
                     # DEBUG: keywords 확인
-                    policy_keywords = []
-                    if getattr(sub_def, 'policy', None):
-                        policy_keywords = sub_def.policy.get('keywords', []) or []
-                    direct_keywords = getattr(sub_def, 'keywords', [])
-                    logger.info(f"[DELEGATION DEBUG] {sub_def.id} keywords: policy={policy_keywords}, direct={direct_keywords}")
+                    # DEBUG: policy_keywords = []
+                    # DEBUG: if getattr(sub_def, 'policy', None):
+                    # DEBUG:     policy_keywords = sub_def.policy.get('keywords', []) or []
+                    # DEBUG: direct_keywords = getattr(sub_def, 'keywords', [])
+                    # DEBUG: logger.info(f"[DELEGATION DEBUG] {sub_def.id} keywords: policy={policy_keywords}, direct={direct_keywords}")
                     
                     kw_score = self._keyword_score(sub_def, message_lower)
                     emb_score = self._embedding_score(message, sub_def)
                     hybrid = self.KEYWORD_WEIGHT * kw_score + self.EMBEDDING_WEIGHT * emb_score
                     
-                    logger.info(f"[DELEGATION] Sub {sub_def.name}: kw={kw_score:.3f}, emb={emb_score:.3f}, hybrid={hybrid:.3f} (threshold={self.hybrid_score_threshold})")
+                    # DEBUG: logger.info(f"[DELEGATION] Sub {sub_def.name}: kw={kw_score:.3f}, emb={emb_score:.3f}, hybrid={hybrid:.3f} (threshold={self.hybrid_score_threshold})")
                     
                     if hybrid >= self.hybrid_score_threshold:
                         logger.info(f"[DELEGATION] ✓ Found qualified sub: {sub_def.name} (hybrid={hybrid:.3f})")
@@ -612,12 +611,11 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         scores.sort(key=lambda x: x['hybrid'], reverse=True)
         
-        # Debug: log scores
-        logger.info(f"[DELEGATE DEBUG] scores list length: {len(scores)}")
-        if scores:
-            logger.info(f"[DELEGATE DEBUG] first score: {scores[0]}")
-            logger.info(f"[DELEGATE DEBUG] first score keys: {scores[0].keys() if isinstance(scores[0], dict) else 'N/A'}")
-        logger.info(f"[DELEGATE DEBUG] hybrid_threshold: {self.hybrid_score_threshold}, keyword_threshold: 0.3")
+        # DEBUG: logger.info(f"[DELEGATE DEBUG] scores list length: {len(scores)}")
+        # DEBUG: if scores:
+        # DEBUG:     logger.info(f"[DELEGATE DEBUG] first score: {scores[0]}")
+        # DEBUG:     logger.info(f"[DELEGATE DEBUG] first score keys: {scores[0].keys() if isinstance(scores[0], dict) else 'N/A'}")
+        # DEBUG: logger.info(f"[DELEGATE DEBUG] hybrid_threshold: {self.hybrid_score_threshold}, keyword_threshold: 0.3")
 
         # multi_sub_execution이면 전체 하위 챗봇 종합 우선
         # (사용자 요청: a/b/c/d 모두 조회 후 종합)
@@ -625,13 +623,13 @@ class HierarchicalAgentExecutor(AgentExecutor):
             selected = scores
         else:
             filtered = [s for s in scores if s['hybrid'] >= self.hybrid_score_threshold]
-            logger.info(f"[DELEGATE DEBUG] filtered length: {len(filtered)}, threshold: {self.hybrid_score_threshold}")
+            # DEBUG: logger.info(f"[DELEGATE DEBUG] filtered length: {len(filtered)}, threshold: {self.hybrid_score_threshold}")
 
             # Fail-safe: if no candidates pass hybrid threshold, include best keyword match
             # if keyword_score >= 0.3 (at least 1 keyword matched)
             if not filtered:
                 keyword_matches = [s for s in scores if s['keyword'] >= 0.3]
-                logger.info(f"[DELEGATE DEBUG] keyword_matches length: {len(keyword_matches)}")
+                # DEBUG: logger.info(f"[DELEGATE DEBUG] keyword_matches length: {len(keyword_matches)}")
                 if keyword_matches:
                     keyword_matches.sort(key=lambda x: (x['keyword'], x['hybrid']), reverse=True)
                     filtered = keyword_matches[:1]
@@ -639,8 +637,8 @@ class HierarchicalAgentExecutor(AgentExecutor):
                     filtered = scores[:1]
 
             selected = filtered[:self.max_parallel_subs]
-            logger.info(f"[DELEGATE DEBUG] selected length: {len(selected)}, max_parallel_subs: {self.max_parallel_subs}")
-            logger.info(f"[DELEGATE DEBUG] filtered type: {type(filtered)}, filtered: {filtered}")
+            # DEBUG: logger.info(f"[DELEGATE DEBUG] selected length: {len(selected)}, max_parallel_subs: {self.max_parallel_subs}")
+            # DEBUG: logger.info(f"[DELEGATE DEBUG] filtered type: {type(filtered)}, filtered: {filtered}")
 
         return [
             (s['chatbot'], f"(kw:{s['keyword']}, emb:{s['embedding']}, hybrid:{s['hybrid']})", {
@@ -680,7 +678,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         score = min(matched / max(len(keywords) * 0.3, 1), 1.0)
 
         # DEBUG: 위임 결정 관련 로그만 남김
-        logger.debug(f"[_keyword_score] {sub_def.id}: matched={matched}/{len(keywords)}, score={score:.3f}")
+        # DEBUG: logger.debug(f"[_keyword_score] {sub_def.id}: matched={matched}/{len(keywords)}, score={score:.3f}")
 
         return score
 
@@ -731,7 +729,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         parent_context: str = "",
     ) -> List[Tuple[str, str, str]]:
         """순차적으로 다중 하위 Agent 실행"""
-        logger.debug(f"[DELEGATE] Sequential execution for {len(sub_candidates)} candidates")
+        # DEBUG: logger.debug(f"[DELEGATE] Sequential execution for {len(sub_candidates)} candidates")
         results = []
         for sub_chatbot, selection_info, scores in sub_candidates:
             try:
@@ -751,7 +749,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
         parent_context: str = "",
     ) -> List[Tuple[str, str, str]]:
         """병렬로 다중 하위 Agent 실행"""
-        logger.debug(f"[DELEGATE] Parallel execution for {len(sub_candidates)} candidates")
+        # DEBUG: logger.debug(f"[DELEGATE] Parallel execution for {len(sub_candidates)} candidates")
         results = []
         errors = []
 
@@ -799,15 +797,14 @@ class HierarchicalAgentExecutor(AgentExecutor):
                 delegation_depth=self.delegation_depth + 1
             )
             enhanced_message = message
-            logger.info(f"[DELEGATE DEBUG] parent_context='{parent_context[:50]}...', message='{message[:50]}...'")
+            # DEBUG: logger.info(f"[DELEGATE DEBUG] parent_context='{parent_context[:50]}...', message='{message[:50]}...'")
             if parent_context:
                 enhanced_message = f"[상위 Agent 컨텍스트] {parent_context[:500]}...\n\n[질문] {message}"
             
-            logger.info(f"[DELEGATE] Enhanced message for {sub_chatbot.name}: {enhanced_message[:100]}...")
-
-            logger.info(f"[DELEGATE] Starting sub-executor for {sub_chatbot.name} with depth={self.delegation_depth + 1}")
+            # DEBUG: logger.info(f"[DELEGATE] Enhanced message for {sub_chatbot.name}: {enhanced_message[:100]}...")
+            # DEBUG: logger.info(f"[DELEGATE] Starting sub-executor for {sub_chatbot.name} with depth={self.delegation_depth + 1}")
             sub_answer = "".join(sub_executor.execute(enhanced_message, session_id))
-            logger.info(f"[DELEGATE] {sub_chatbot.name} completed, answer length: {len(sub_answer)}")
+            # DEBUG: logger.info(f"[DELEGATE] {sub_chatbot.name} completed, answer length: {len(sub_answer)}")
             
             source_header = f"🧾 {self._source_note(sub_chatbot)}\n\n"
             return source_header + sub_answer
@@ -839,7 +836,7 @@ class HierarchicalAgentExecutor(AgentExecutor):
 
         yield f"🧾 {self._source_note(sub_chatbot)}\n\n"
         
-        logger.info(f"[DELEGATE] Message in _delegate_to_sub: '{message[:50]}...'")
+        # DEBUG: logger.info(f"[DELEGATE] Message in _delegate_to_sub: '{message[:50]}...'")
         
         yield from sub_executor.execute(enhanced_message, session_id)
 
@@ -854,22 +851,22 @@ class HierarchicalAgentExecutor(AgentExecutor):
         sub_responses: List[Tuple[str, str, str]],
     ) -> str:
         """다중 하위 Agent 응답을 종합하여 하나의 응답 생성"""
-        logger.debug(f"[SYNTHESIZE] Starting with {len(sub_responses)} responses")
+        # DEBUG: logger.debug(f"[SYNTHESIZE] Starting with {len(sub_responses)} responses")
         
         if not sub_responses:
-            logger.warning("[SYNTHESIZE] No responses from sub-agents")
+            # DEBUG: logger.warning("[SYNTHESIZE] No responses from sub-agents")
             return "❌ 하위 Agent로부터 응답을 받지 못했습니다."
 
         if len(sub_responses) == 1:
             _, name, response = sub_responses[0]
-            logger.debug(f"[SYNTHESIZE] Single response from {name}, returning directly")
+            # DEBUG: logger.debug(f"[SYNTHESIZE] Single response from {name}, returning directly")
             return f"**[{name}]**\n\n{response}"
 
-        logger.debug(f"[SYNTHESIZE] Building synthesis prompt for {len(sub_responses)} responses")
+        # DEBUG: logger.debug(f"[SYNTHESIZE] Building synthesis prompt for {len(sub_responses)} responses")
         synthesis_prompt = self._build_synthesis_prompt(parent_context, user_message, sub_responses)
 
         try:
-            logger.debug("[SYNTHESIZE] Calling LLM for synthesis")
+            # DEBUG: logger.debug("[SYNTHESIZE] Calling LLM for synthesis")
             client = get_llm_client()
             messages = [
                 {"role": "system", "content": synthesis_prompt["system"]},
@@ -886,10 +883,10 @@ class HierarchicalAgentExecutor(AgentExecutor):
             synthesized += "\n\n---\n**참고 전문가:** " + ", ".join(
                 [f"[{name}]" for _, name, _ in sub_responses]
             )
-            logger.debug(f"[SYNTHESIZE] LLM response length: {len(synthesized)}")
+            # DEBUG: logger.debug(f"[SYNTHESIZE] LLM response length: {len(synthesized)}")
             return synthesized
         except Exception as e:
-            logger.warning(f"[SYNTHESIZE] LLM error: {e}, using fallback")
+            # DEBUG: logger.warning(f"[SYNTHESIZE] LLM error: {e}, using fallback")
             return self._fallback_synthesis(sub_responses)
 
     def _build_synthesis_prompt(
