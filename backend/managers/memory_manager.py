@@ -55,3 +55,7 @@ class MemoryManager:
         keys_to_remove = [k for k in self._store if k[1] == session_id]
         for k in keys_to_remove:
             del self._store[k]
+
+    def get_all_keys(self) -> list[tuple[str, str]]:
+        """디버그용: 저장된 모든 키 반환"""
+        return list(self._store.keys())
