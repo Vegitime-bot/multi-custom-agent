@@ -388,6 +388,7 @@ async def chat(
     logger.info(f"[Chat {request_id}] message: {body.message[:50]}...")
     logger.info(f"[Chat {request_id}] session_id: {body.session_id}")
     logger.info(f"[Chat {request_id}] mode: {body.mode}")
+    logger.info(f"[Chat {request_id}] session_id from request: '{body.session_id}'")  # 추가
 
     # 1. 챗봇 정의 조회
     chatbot_def = chatbot_mgr.get_active(body.chatbot_id)
@@ -396,12 +397,13 @@ async def chat(
     logger.info(f"[Chat {request_id}] 챗봇 조회 성공: {chatbot_def.name}")
 
     # 2. 세션 확인/생성
+    logger.info(f"[Chat {request_id}] Calling get_or_create with session_id={body.session_id}")
     session = session_mgr.get_or_create(
         chatbot_id=body.chatbot_id,
         user_knox_id=get_current_user(request)["knox_id"],
         session_id=body.session_id,
     )
-    logger.info(f"[Chat {request_id}] 세션: {session.session_id}")
+    logger.info(f"[Chat {request_id}] 세션 결과: {session.session_id}")
 
     # 3. 모드 결정 (요청 > 세션 > 챗봇 default)
     mode_str = body.mode
